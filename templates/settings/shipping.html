@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Shipping Settings - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div id="shipping-page-wrapper">
+<h2 class="mb-3">Shipping Settings</h2>
+
+{% set current_tab = active_tab or 'ports' %}
+
+<ul class="nav nav-tabs mb-3 small">
+  <li class="nav-item">
+    <button class="nav-link {% if current_tab == 'ports' %}active{% endif %}"
+            data-bs-toggle="tab" data-bs-target="#tab-ports" type="button">
+      Ports & Destinations
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link {% if current_tab == 'fob' %}active{% endif %}"
+            data-bs-toggle="tab" data-bs-target="#tab-fob" type="button">
+      FOB Costs
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link {% if current_tab == 'sea' %}active{% endif %}"
+            data-bs-toggle="tab" data-bs-target="#tab-sea" type="button">
+      Sea Freight
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content small">
+  <!-- Ports & Destinations -->
+  <div class="tab-pane fade {% if current_tab == 'ports' %}show active{% endif %}" id="tab-ports">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>Add Port</strong></div>
+          <form method="post"
+                class="ajax-partial"
+                data-update-target="shipping-page-wrapper">
+            <input type="hidden" name="_action" value="add_port">
+            <div class="card-body py-2">
+              <div class="mb-2">
+                <label class="form-label">Port name</label>
+                <input type="text" name="port_name" class="form-control form-control-sm" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Country</label>
+                <input type="text" name="port_country" class="form-control form-control-sm" required>
+              </div>
+            </div>
+            <div class="card-footer text-end py-2">
+              <button type="submit"
+                      class="btn btn-primary btn-sm"
+                      data-loading-label="Saving...">
+                Save port
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+          <div class="card-header py-2"><strong>Ports</strong></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Name</th>
+                  <th>Country</th>
+                  <th class="text-center" style="width: 80px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in ports %}
+                <tr>
+                  <td>{{ p[1] }}</td>
+                  <td>{{ p[2] }}</td>
+                  <td class="text-center">
+                    <form method="post"
+                          action="{{ url_for('settings.delete_port', port_id=p[0]) }}"
+                          class="d-inline ajax-partial"
+                          data-update-target="shipping-page-wrapper"
+                          data-confirm="Delete this port?">
+                      <button type="submit"
+                              class="btn btn-sm btn-outline-danger"
+                              data-loading-label="Deleting...">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="text-center text-muted py-2">No ports yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>Add Destination</strong></div>
+          <form method="post"
+                class="ajax-partial"
+                data-update-target="shipping-page-wrapper">
+            <input type="hidden" name="_action" value="add_destination">
+            <div class="card-body py-2">
+              <div class="mb-2">
+                <label class="form-label">Country</label>
+                <input type="text" name="dest_country" class="form-control form-control-sm" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">City (optional)</label>
+                <input type="text" name="dest_city" class="form-control form-control-sm">
+              </div>
+            </div>
+            <div class="card-footer text-end py-2">
+              <button type="submit"
+                      class="btn btn-primary btn-sm"
+                      data-loading-label="Saving...">
+                Save destination
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+          <div class="card-header py-2"><strong>Destinations</strong></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Country</th>
+                  <th>City</th>
+                  <th class="text-center" style="width: 80px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in destinations %}
+                <tr>
+                  <td>{{ d[1] }}</td>
+                  <td>{{ d[2] }}</td>
+                  <td class="text-center">
+                    <form method="post"
+                          action="{{ url_for('settings.delete_destination', dest_id=d[0]) }}"
+                          class="d-inline ajax-partial"
+                          data-update-target="shipping-page-wrapper"
+                          data-confirm="Delete this destination?">
+                      <button type="submit"
+                              class="btn btn-sm btn-outline-danger"
+                              data-loading-label="Deleting...">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="text-center text-muted py-2">No destinations yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOB Costs -->
+  <div class="tab-pane fade {% if current_tab == 'fob' %}show active{% endif %}" id="tab-fob">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>Set FOB cost</strong></div>
+          <form method="post"
+                class="ajax-partial"
+                data-update-target="shipping-page-wrapper">
+            <input type="hidden" name="_action" value="add_fob">
+            <div class="card-body py-2">
+              <div class="mb-2">
+                <label class="form-label">Port</label>
+                <select name="fob_port_id" class="form-select form-select-sm" required>
+                  <option value="">-- Select port --</option>
+                  {% for p in ports %}
+                  <option value="{{ p[0] }}">{{ p[1] }} ({{ p[2] }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">FOB cost (USD/container)</label>
+                <input type="number" name="fob_cost_usd_per_container" class="form-control form-control-sm"
+                       step="0.01" min="0" required>
+              </div>
+            </div>
+            <div class="card-footer text-end py-2">
+              <button type="submit"
+                      class="btn btn-primary btn-sm"
+                      data-loading-label="Saving...">
+                Save FOB
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-md-8">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>FOB costs</strong></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Port</th>
+                  <th class="text-end">FOB (USD/container)</th>
+                  <th class="text-center" style="width: 80px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for f in fob_costs %}
+                <tr>
+                  <td>{{ f[1] }} ({{ f[2] }})</td>
+                  <td class="text-end">{{ "%.2f"|format(f[3]) }}</td>
+                  <td class="text-center">
+                    <form method="post"
+                          action="{{ url_for('settings.delete_fob_cost', fob_id=f[0]) }}"
+                          class="d-inline ajax-partial"
+                          data-update-target="shipping-page-wrapper"
+                          data-confirm="Delete this FOB cost?">
+                      <button type="submit"
+                              class="btn btn-sm btn-outline-danger"
+                              data-loading-label="Deleting...">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="text-center text-muted py-2">No FOB costs yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sea Freight -->
+  <div class="tab-pane fade {% if current_tab == 'sea' %}show active{% endif %}" id="tab-sea">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>Set sea freight</strong></div>
+          <form method="post"
+                class="ajax-partial"
+                data-update-target="shipping-page-wrapper">
+            <input type="hidden" name="_action" value="add_sea_freight">
+            <div class="card-body py-2">
+              <div class="mb-2">
+                <label class="form-label">Loading port</label>
+                <select name="sf_port_id" class="form-select form-select-sm" required>
+                  <option value="">-- Select port --</option>
+                  {% for p in ports %}
+                  <option value="{{ p[0] }}">{{ p[1] }} ({{ p[2] }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Destination</label>
+                <select name="sf_dest_id" class="form-select form-select-sm" required>
+                  <option value="">-- Select destination --</option>
+                  {% for d in destinations %}
+                  <option value="{{ d[0] }}">{{ d[1] }}{% if d[2] %} - {{ d[2] }}{% endif %}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Rate (USD/container)</label>
+                <input type="number" name="sf_rate_usd_per_container" class="form-control form-control-sm"
+                       step="0.01" min="0" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Carrier (optional)</label>
+                <input type="text" name="sf_carrier_name" class="form-control form-control-sm">
+              </div>
+            </div>
+            <div class="card-footer text-end py-2">
+              <button type="submit"
+                      class="btn btn-primary btn-sm"
+                      data-loading-label="Saving...">
+                Save rate
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-md-8">
+        <div class="card shadow-sm">
+          <div class="card-header py-2"><strong>Sea freight rates</strong></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Loading port</th>
+                  <th>Destination</th>
+                  <th class="text-end">Rate (USD/container)</th>
+                  <th>Carrier</th>
+                  <th class="text-center" style="width: 80px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in sea_freight %}
+                <tr>
+                  <td>{{ s[1] }}</td>
+                  <td>{{ s[2] }}{% if s[3] %} - {{ s[3] }}{% endif %}</td>
+                  <td class="text-end">{{ "%.2f"|format(s[4]) }}</td>
+                  <td>{{ s[5] }}</td>
+                  <td class="text-center">
+                    <form method="post"
+                          action="{{ url_for('settings.delete_sea_freight', rate_id=s[0]) }}"
+                          class="d-inline ajax-partial"
+                          data-update-target="shipping-page-wrapper"
+                          data-confirm="Delete this sea freight rate?">
+                      <button type="submit"
+                              class="btn btn-sm btn-outline-danger"
+                              data-loading-label="Deleting...">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-2">No sea freight rates yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}

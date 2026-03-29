@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Costing Settings - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-gear"></i> Costing Settings</h2>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="costingTabs" role="tablist">
+  {% if current_user.role in ['admin','owner'] %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if active_tab == 'energy' %}active{% endif %}"
+            id="energy-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#energy-pane"
+            type="button"
+            role="tab"
+            aria-controls="energy-pane"
+            aria-selected="{{ 'true' if active_tab == 'energy' else 'false' }}">
+      Energy
+    </button>
+  </li>
+  {% endif %}
+
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if active_tab == 'fx' or current_user.role == 'sales_manager' %}active{% endif %}"
+            id="fx-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#fx-pane"
+            type="button"
+            role="tab"
+            aria-controls="fx-pane"
+            aria-selected="true">
+      FX
+    </button>
+  </li>
+
+  {% if current_user.role in ['admin','owner'] %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if active_tab == 'machine_costs' %}active{% endif %}"
+            id="machine-costs-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#machine-costs-pane"
+            type="button"
+            role="tab"
+            aria-controls="machine-costs-pane"
+            aria-selected="{{ 'true' if active_tab == 'machine_costs' else 'false' }}">
+      Machine Costs
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if active_tab == 'import_profiles' %}active{% endif %}"
+            id="import-profiles-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#import-profiles-pane"
+            type="button"
+            role="tab"
+            aria-controls="import-profiles-pane"
+            aria-selected="{{ 'true' if active_tab == 'import_profiles' else 'false' }}">
+      Landed Cost Overhead
+    </button>
+  </li>
+  {% endif %}
+</ul>
+
+<div class="tab-content" id="costingTabsContent">
+  {# ---------------- Energy tab ---------------- #}
+  {% if current_user.role in ['admin','owner'] %}
+  <div class="tab-pane fade {% if active_tab == 'energy' %}show active{% endif %}"
+       id="energy-pane" role="tabpanel" aria-labelledby="energy-tab">
+    <div class="card shadow">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Energy</h5>
+
+        {% set current_energy = energy_rates[0] if energy_rates else None %}
+
+        <form method="post"
+              action="{{ url_for('settings.save_energy') }}"
+              class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">EGP per kWh</label>
+            <input type="number"
+                   step="0.001"
+                   name="egp_per_kwh"
+                   class="form-control"
+                   required
+                   value="{{ '%.3f'|format(current_energy[1]) if current_energy else '' }}">
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+              Save Energy Rate
+            </button>
+          </div>
+        </form>
+
+        <hr>
+
+        <h6>Current energy rate</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="text-end">EGP/kWh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if current_energy %}
+              <tr>
+                <td>{{ current_energy[2] }}</td>
+                <td class="text-end">{{ "%.2f"|format(current_energy[1]) }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-center text-muted">No rate yet.</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <small class="text-muted d-block mt-2">
+          The current electricity tariff is used to calculate energy cost in USD/kWh.
+        </small>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---------------- FX tab ---------------- #}
+  <div class="tab-pane fade {% if active_tab == 'fx' or current_user.role == 'sales_manager' %}show active{% endif %}"
+       id="fx-pane" role="tabpanel" aria-labelledby="fx-tab">
+    <div class="card shadow">
+      <div class="card-body">
+        <h5 class="card-title mb-3">FX</h5>
+
+        {% set current_fx = currency_rates[0] if currency_rates else None %}
+
+        <form method="post"
+              action="{{ url_for('settings.save_fx') }}"
+              class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">EGP per USD</label>
+            <input type="number"
+                   step="0.01"
+                   name="egp_per_usd"
+                   class="form-control"
+                   required
+                   value="{{ '%.2f'|format(current_fx[1]) if current_fx else '' }}">
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+              Save FX Rate
+            </button>
+          </div>
+        </form>
+
+        <hr>
+
+        <h6>Current FX rate</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="text-end">EGP/USD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if current_fx %}
+              <tr>
+                <td>{{ current_fx[2] }}</td>
+                <td class="text-end">{{ "%.2f"|format(current_fx[1]) }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-center text-muted">No rate yet.</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <small class="text-muted d-block mt-2">
+          The current FX rate is used to convert EGP to USD and to price new quotations.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  {# ---------------- Machine Costs tab ---------------- #}
+  {% if current_user.role in ['admin','owner'] %}
+  <div class="tab-pane fade {% if active_tab == 'machine_costs' %}show active{% endif %}"
+       id="machine-costs-pane" role="tabpanel" aria-labelledby="machine-costs-tab">
+    <div id="machine-costs-block-wrapper">
+      {% include "settings/_machine_costs_block.html" %}
+    </div>
+  </div>
+
+  {# ---------------- Landed Cost Overhead tab ---------------- #}
+  <div class="tab-pane fade {% if active_tab == 'import_profiles' %}show active{% endif %}"
+       id="import-profiles-pane" role="tabpanel" aria-labelledby="import-profiles-tab">
+    <div class="card shadow mb-3 mt-3 mt-lg-0">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Landed Cost Overhead</h5>
+        <form method="post"
+              action="{{ url_for('settings.save_import_profile') }}"
+              class="row g-3 ajax-partial"
+              data-update-target="import-profiles-table-wrapper">
+          <div class="col-md-4">
+            <label class="form-label">Mode</label>
+            <select name="mode" class="form-select" required>
+              <option value="per_ton">Per ton (USD/ton)</option>
+              <option value="percent">Percent of invoice price (%)</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Value</label>
+            <input type="number" step="0.0001" name="value"
+                   class="form-control" required>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+              Save Overhead
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Current Landed Cost Overhead</h5>
+        <div id="import-profiles-table-wrapper">
+          {% include "settings/_import_profiles_table.html" %}
+        </div>
+        <small class="text-muted d-block mt-2">
+          These overheads are applied on imported raw materials to get landed cost per kg.
+        </small>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

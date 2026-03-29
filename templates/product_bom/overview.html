@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}BOM Overview - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>BOM Overview</h2>
+</div>
+
+<div class="card shadow">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Product</th>
+          <th class="text-end">BOM %</th>
+          <th class="text-end">Material cost (USD/kg)</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+          {# p indices:
+             0: id
+             1: code
+             2: micron
+             3: stretchability_percent
+             4: bom_scrap_percent
+             5: film_type
+          #}
+          {% set summary = bom_summary.get(p[0]) %}
+          {% set total_pct = summary and summary.total_pct or 0 %}
+          {% set total_cost = summary and summary.total_cost or 0 %}
+          <tr>
+            <td>
+              {{ p[1] }}
+              - {{ p[2] }}µm
+              - {{ p[3] }}%
+              - 
+              {% if p[5] == 'standard' %}Standard
+              {% elif p[5] == 'regid' %}REGID
+              {% elif p[5] == 'power' %}Power
+              {% elif p[5] == 'power_plus' %}Power Plus
+              {% elif p[5] == 'uvi_6m' %}UVI (6 month)
+              {% elif p[5] == 'uvi_12m' %}UVI (12 month)
+              {% elif p[5] == 'prestretch' %}Prestretch
+              {% else %}{{ p[5] }}
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {{ "%.2f"|format(total_pct * 100) }}%
+              {% if total_pct|float != 1.0 %}
+                <span class="badge bg-warning ms-1">≠ 100%</span>
+              {% endif %}
+            </td>
+            <td class="text-end">{{ "%.4f"|format(total_cost) }}</td>
+            <td class="text-center">
+              <a href="{{ url_for('product_bom.edit_bom', product_id=p[0]) }}"
+                 class="btn btn-sm btn-outline-primary">
+                Edit BOM
+              </a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="text-center text-muted py-4">
+              No products yet.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,388 @@
+{# templates/materials/index.html #}
+{% extends "base.html" %}
+{% block title %}Materials - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>Materials</h2>
+  {% if current_user.role in ['admin','owner'] %}
+  <button type="button"
+          class="btn btn-success"
+          id="materials-add-btn">
+    <i class="bi bi-plus-lg"></i> Add Material
+  </button>
+  {% endif %}
+</div>
+
+<div class="card shadow">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th class="text-end">Unit</th>
+          <th class="text-end">Currency</th>
+          <th class="text-end">Price</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="materials-tbody">
+        {% for m in materials %}
+        {% set unit_type = m[5] %}
+        {% set currency = m[6] %}
+        {% set price = m[7] or 0 %}
+        <tr data-material-id="{{ m[0] }}">
+          <td>{{ m[1] }}</td>
+          <td>{{ m[2] }}</td>
+          <td>{{ m[3] }}</td>
+
+          {% if unit_type == 'weight' %}
+            <td class="text-end">kg</td>
+          {% else %}
+            <td class="text-end">{{ m[4] }}</td>
+          {% endif %}
+
+          <td class="text-end">{{ currency }}</td>
+          <td class="text-end">{{ "%.2f"|format(price) }}</td>
+
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button type="button"
+                      class="btn btn-outline-primary materials-edit-btn"
+                      data-material-id="{{ m[0] }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {% if current_user.role in ['admin','owner'] %}
+              <button type="button"
+                      class="btn btn-outline-danger materials-delete-btn"
+                      data-material-id="{{ m[0] }}">
+                <i class="bi bi-trash"></i>
+              </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr class="materials-empty-row">
+          <td colspan="7" class="text-center text-muted py-4">
+            No materials yet. Click “Add Material” to create one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# Modal for Add/Edit material #}
+<div class="modal fade" id="materialModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form id="material-modal-form" data-no-spinner="1">
+        <div class="modal-header">
+          <h5 class="modal-title" id="material-modal-title">Add Material</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="id" id="mat-id" value="0">
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Name</label>
+              <input type="text" name="name" id="mat-name"
+                     class="form-control"
+                     {% if current_user.role == 'sales_manager' %}readonly{% else %}required{% endif %}>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Category</label>
+              <select name="category" id="mat-category"
+                      class="form-select"
+                      {% if current_user.role == 'sales_manager' %}disabled{% else %}required{% endif %}>
+                <option value="">-- Select --</option>
+                <option value="RAW">RAW</option>
+                <option value="PACKING">PACKING</option>
+                <option value="CORE">CORE</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Currency</label>
+              <select name="currency" id="mat-currency"
+                      class="form-select"
+                      {% if current_user.role == 'sales_manager' %}disabled{% endif %}>
+                <option value="USD">USD</option>
+                <option value="EGP">EGP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <label class="form-label">Unit type</label>
+              <select name="unit_type" id="mat-unit-type"
+                      class="form-select"
+                      {% if current_user.role == 'sales_manager' %}disabled{% endif %}>
+                <option value="weight">Weight</option>
+                <option value="count">Count</option>
+                <option value="length">Length</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Input unit</label>
+              <select name="unit" id="mat-unit" class="form-select">
+                <option value="Ton">Ton</option>
+                <option value="kg" selected>Kg</option>
+                <option value="pc">Piece</option>
+                <option value="carton">Carton</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">
+                Price per input unit
+              </label>
+              <input type="number" name="price_input" id="mat-price-input"
+                     class="form-control" step="0.0001" min="0" required>
+            </div>
+          </div>
+
+          <div class="alert alert-info py-2 small mb-0">
+            Internally, if <strong>unit type</strong> is weight and unit is Ton, price is stored per kg.
+            Otherwise it is stored per specified unit as-is.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" id="material-modal-save-btn" class="btn btn-primary btn-sm">
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const tbody = document.getElementById('materials-tbody');
+  const addBtn = document.getElementById('materials-add-btn');
+
+  const modalEl = document.getElementById('materialModal');
+  const materialModal = new bootstrap.Modal(modalEl);
+
+  const form = document.getElementById('material-modal-form');
+  const saveBtn = document.getElementById('material-modal-save-btn');
+  const titleEl = document.getElementById('material-modal-title');
+
+  const fieldId = document.getElementById('mat-id');
+  const fieldName = document.getElementById('mat-name');
+  const fieldCategory = document.getElementById('mat-category');
+  const fieldCurrency = document.getElementById('mat-currency');
+  const fieldUnitType = document.getElementById('mat-unit-type');
+  const fieldUnit = document.getElementById('mat-unit');
+  const fieldPriceInput = document.getElementById('mat-price-input');
+
+  const role = "{{ current_user.role if current_user.is_authenticated else '' }}";
+
+  function resetModalForm() {
+    fieldId.value = '0';
+    fieldName.value = '';
+    fieldCategory.value = '';
+    fieldCurrency.value = 'USD';
+    fieldUnitType.value = 'weight';
+    fieldUnit.value = 'kg';
+    fieldPriceInput.value = '';
+  }
+
+  function fillModalFormFromData(data) {
+    fieldId.value = data.id || 0;
+    fieldName.value = data.name || '';
+    fieldCategory.value = data.category || '';
+    fieldCurrency.value = data.currency || 'USD';
+    fieldUnitType.value = data.unit_type || 'weight';
+    fieldUnit.value = data.input_unit || data.raw_unit || 'kg';
+    fieldPriceInput.value = (data.display_price != null ? Number(data.display_price).toFixed(4) : '');
+  }
+
+  function renderMaterialsTableRow(material) {
+    const existing = tbody.querySelector(`tr[data-material-id="${material.id}"]`);
+    const tr = existing || document.createElement('tr');
+    tr.dataset.materialId = material.id;
+
+    const unit = material.unit;  // already "kg" if weight
+
+    tr.innerHTML = `
+      <td>${material.code}</td>
+      <td>${material.name}</td>
+      <td>${material.category}</td>
+      <td class="text-end">${unit}</td>
+      <td class="text-end">${material.currency}</td>
+      <td class="text-end">${material.price.toFixed(2)}</td>
+      <td class="text-center">
+        <div class="btn-group btn-group-sm">
+          <button type="button"
+                  class="btn btn-outline-primary materials-edit-btn"
+                  data-material-id="${material.id}">
+            <i class="bi bi-pencil"></i>
+          </button>
+          ${role === 'admin' || role === 'owner' ? `
+          <button type="button"
+                  class="btn btn-outline-danger materials-delete-btn"
+                  data-material-id="${material.id}">
+            <i class="bi bi-trash"></i>
+          </button>` : ''}
+        </div>
+      </td>
+    `;
+
+    if (!existing) {
+      const emptyRow = tbody.querySelector('.materials-empty-row');
+      if (emptyRow) emptyRow.remove();
+      tbody.appendChild(tr);
+    }
+  }
+
+  function renderMaterialsTable(data) {
+    const materials = data.materials || [];
+    tbody.innerHTML = '';
+
+    if (!materials.length) {
+      const tr = document.createElement('tr');
+      tr.classList.add('materials-empty-row');
+      tr.innerHTML = `
+        <td colspan="7" class="text-center text-muted py-4">
+          No materials yet. Click “Add Material” to create one.
+        </td>
+      `;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    materials.forEach(m => {
+      renderMaterialsTableRow(m);
+    });
+  }
+
+  // Add new material (admin/owner فقط)
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      titleEl.textContent = 'Add Material';
+      resetModalForm();
+      materialModal.show();
+      fieldName.focus();
+    });
+  }
+
+  // Edit existing material (open modal + load data)
+  tbody.addEventListener('click', function (e) {
+    const editBtn = e.target.closest('.materials-edit-btn');
+    if (editBtn) {
+      const id = editBtn.dataset.materialId;
+      if (!id) return;
+
+      titleEl.textContent = 'Edit Material';
+
+      resetModalForm();
+
+      fetch("{{ url_for('materials.get_material', material_id=0) }}".replace('0', id), {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        fillModalFormFromData(data);
+        materialModal.show();
+        fieldName.focus();
+      })
+      .catch(err => {
+        alert(err.error || 'Failed to load material data');
+      });
+
+      return;
+    }
+
+    const deleteBtn = e.target.closest('.materials-delete-btn');
+    if (deleteBtn) {
+      if (!(role === 'admin' || role === 'owner')) {
+        return;
+      }
+
+      const id = deleteBtn.dataset.materialId;
+      if (!id) return;
+
+      const ok = confirm('Delete this material?');
+      if (!ok) return;
+
+      const originalHtml = deleteBtn.innerHTML;
+      deleteBtn.disabled = true;
+      deleteBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+      fetch(
+        "{{ url_for('materials.delete_ajax', material_id=0) }}".replace('0', id),
+        {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        }
+      )
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        renderMaterialsTable(data);
+      })
+      .catch(err => {
+        alert(err.error || 'Deleting material failed');
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalHtml;
+      });
+    }
+  });
+
+  // Save from modal (create/update) via AJAX
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch("{{ url_for('materials.save_ajax') }}", {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+    .then(data => {
+      if (!data.material) {
+        throw {error: 'Invalid response from server'};
+      }
+      renderMaterialsTableRow(data.material);
+      materialModal.hide();
+    })
+    .catch(err => {
+      alert(err.error || 'Saving material failed');
+    })
+    .finally(() => {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save';
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

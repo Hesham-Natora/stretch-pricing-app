@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Machines - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-gear"></i> Machines</h2>
+  <a href="{{ url_for('machines.edit', machine_id=0) }}" class="btn btn-success">
+    <i class="bi bi-plus-lg"></i> Add Machine
+  </a>
+</div>
+
+<div class="card shadow">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Name</th>
+          <th class="text-center">Utilization</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in machines %}
+        <tr>
+          <td>{{ m[1] }}</td>
+          <td class="text-center">
+            <span class="badge bg-info">{{ "%.1f"|format(m[2]*100) }}%</span>
+          </td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <a href="{{ url_for('machines.edit', machine_id=m[0]) }}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{{ url_for('machines.delete', machine_id=m[0]) }}" class="btn btn-outline-danger"
+                 onclick="return confirm('Delete this machine?');">
+                <i class="bi bi-trash"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="text-center text-muted py-4">
+            No machines yet. Click “Add Machine” to create one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

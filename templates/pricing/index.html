@@ -1,0 +1,740 @@
+{% extends "base.html" %}
+{% block title %}Quotations - Stretch Film Pricing{% endblock %}
+
+{% block content %}
+
+<style>
+  .quote-layout {
+    max-width: 100%;
+  }
+
+  .quote-header-bar {
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem 1rem 0.4rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .quote-header-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+  }
+
+  .label-muted {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-bottom: 0.15rem;
+  }
+
+  .pill-input,
+  .pill-select {
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.8rem;
+  }
+
+  .pill-input:focus,
+  .pill-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+  }
+
+  .pill-select option {
+    font-size: 0.8rem;
+  }
+
+  .card-soft {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  }
+
+  .card-soft-header {
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid #edf0f3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-soft-header-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  .fixTableHead {
+    max-height: 65vh;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  .fixTableHead table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .table-pricing {
+    font-size: 0.8rem;
+  }
+
+  .table-pricing thead th {
+    background: #f3f4f6;
+    border-bottom: 1px solid #edf0f3;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .table-pricing td,
+  .table-pricing th {
+    vertical-align: middle;
+    padding: 0.3rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  /* أعمدة نصية عريضة */
+  th.col-product   { min-width: 230px; text-align: left; }
+  th.col-pallet    { min-width: 140px; text-align: left; }
+  th.col-packing   { min-width: 140px; text-align: left; }
+  th.col-basis     { min-width: 120px; text-align: left; }
+
+  /* أعمدة رقمية ضيقة ومتمركزة */
+  th.col-width,
+  th.col-rolls,
+  th.col-rollkg,
+  th.col-corekg,
+  th.col-pallets,
+  th.col-discount,
+  th.col-exw,
+  th.col-fob,
+  th.col-cfr {
+    width: 70px;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  td.col-width,
+  td.col-rolls,
+  td.col-rollkg,
+  td.col-corekg,
+  td.col-pallets,
+  td.col-discount,
+  td.col-exw,
+  td.col-fob,
+  td.col-cfr {
+    text-align: center;
+  }
+
+  /* مربع اللون */
+  th.col-colored {
+    width: 45px;
+    text-align: center;
+  }
+  td.col-colored {
+    text-align: center;
+  }
+  td.col-colored .form-check-input {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin: 0;
+  }
+
+  /* inputs جوه الأعمدة الرقمية تاخد عرض الخليّة وتفضل صغيرة */
+  td.col-width    input,
+  td.col-rolls    input,
+  td.col-rollkg   input,
+  td.col-corekg   input,
+  td.col-pallets  input,
+  td.col-discount input,
+  td.col-exw      input,
+  td.col-fob      input,
+  td.col-cfr      input {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    padding-inline: 0.25rem;
+  }
+
+  .table-pricing td select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .compact-input {
+    max-width: none;
+  }
+
+  .price-cell input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .is-invalid {
+    border-color: #dc3545;
+  }
+
+</style>
+
+
+<div class="quote-layout">
+
+  <!-- Seller type selector (for admins/managers only) -->
+  <div class="d-flex justify-content-end mb-2">
+    {% if current_user.role in ['admin', 'owner', 'sales_manager'] %}
+      {% set st = (pricing_header.seller_type if pricing_header is defined and pricing_header is not none else None) %}
+      {% if not st %}
+        {% set st = 'egyptian' %}
+      {% endif %}
+      <div class="d-inline-flex align-items-center gap-2">
+        <label class="label-muted mb-0">Seller type</label>
+        <select name="seller_type"
+                form="quotation-form"
+                class="form-select form-select-sm pill-select"
+                style="max-width: 200px;">
+          <option value="egyptian" {% if st == 'egyptian' %}selected{% endif %}>Egyptian sellers</option>
+          <option value="foreign" {% if st == 'foreign' %}selected{% endif %}>Foreign sellers</option>
+        </select>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Horizontal quotation header -->
+  <div class="quote-header-bar">
+    <div class="d-flex justify-content-between align-items-end">
+      <div class="d-flex align-items-center gap-2">
+        <h2 class="quote-header-title mb-0">New quotation</h2>
+        <button type="button"
+                id="new-quotation-btn"
+                class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-trash3"></i> New quotation
+        </button>
+      </div>
+      <div class="text-end">
+        <button type="button"
+                id="save-btn"
+                class="btn btn-success btn-sm me-2">
+          <i class="bi bi-save"></i> Save
+        </button>
+        <!-- زرار Export مع قائمة اختيار PDF/Excel -->
+        <div class="btn-group me-2">
+          <button type="button"
+                  class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false">
+            <i class="bi bi-upload"></i> Export
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" id="export-pdf-btn">Export to PDF</a></li>
+            <li><a class="dropdown-item" href="#" id="export-excel-btn">Export to Excel</a></li>
+          </ul>
+        </div>
+        <button type="submit"
+                form="quotation-form"
+                id="calculate-btn"
+                class="btn btn-primary btn-sm">
+          <i class="bi bi-lightning-charge"></i> Calculate
+        </button>
+      </div>
+    </div>
+
+    <!-- مهم: data-no-spinner يمنع السبينر العام -->
+    <form id="quotation-form" method="post" class="mt-3" data-no-spinner="1">
+      <input type="hidden" name="_mode" id="form-mode" value="calculate">
+
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="label-muted">Loading port</label>
+          <select name="port_id" class="form-select form-select-sm pill-select">
+            <option value="" selected disabled>Select...</option>
+            {% for port in ports %}
+            <option value="{{ port[0] }}"
+                    {% if selected_port_id and selected_port_id == port[0] %}selected{% endif %}>
+              {{ port[1] }} ({{ port[2] }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="label-muted">Destination</label>
+          <select name="destination_id" class="form-select form-select-sm pill-select" id="destination-select">
+            <option value="" selected disabled>Select...</option>
+            {% for d in destinations %}
+            <option value="{{ d[0] }}"
+                    {% if selected_dest_id and selected_dest_id == d[0] %}selected{% endif %}>
+              {{ d[1] }}{% if d[2] %} – {{ d[2] }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="label-muted">Payment term</label>
+          <select name="payment_term_id" class="form-select form-select-sm pill-select">
+            <option value="" selected disabled>Select...</option>
+            {% for pt in payment_terms %}
+            <option value="{{ pt[0] }}"
+                    {% if selected_payment_term_id and selected_payment_term_id == pt[0] %}selected{% endif %}>
+              {{ pt[1] }} ({{ pt[2] }} days)
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="label-muted">Global discount %</label>
+          <input type="number"
+                 name="discount_percent"
+                 class="form-control form-control-sm pill-input"
+                 step="0.01" min="0" max="100"
+                 value="{{ discount_percent if discount_percent is not none else '' }}">
+        </div>
+      </div>
+
+      <div class="row g-2 align-items-end mt-2">
+        <div class="col-md-3">
+          <label class="label-muted">Customer name</label>
+          <input type="text"
+                 name="customer_name"
+                 class="form-control form-control-sm pill-input">
+        </div>
+        <div class="col-md-3">
+          <label class="label-muted">Quotation no.</label>
+          <input type="text"
+                 name="quotation_number"
+                 class="form-control form-control-sm pill-input">
+        </div>
+      </div>
+
+      <!-- Lines table -->
+      <div class="card-soft mt-3">
+        <div class="card-soft-header">
+          <div class="card-soft-header-title">Quotation lines</div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="add-row-btn">
+            <i class="bi bi-plus-lg"></i> Add line
+          </button>
+        </div>
+
+        <div class="fixTableHead">
+          <table class="table table-sm table-pricing mb-0" id="lines-table">
+            <thead>
+              <tr>
+                <th style="width:3%;">#</th>
+                <th class="col-product">Product</th>
+                <th class="col-pallet">Pallet type</th>
+                <th class="col-packing">Packing type</th>
+                <th class="col-basis">Price basis</th>
+                <th class="col-colored">Colored</th>
+                <th class="col-width">Width (mm)</th>
+                <th class="col-rolls">Rolls/pallet</th>
+                <th class="col-rollkg">Roll kg</th>
+                <th class="col-corekg">Core kg</th>
+                <th class="col-pallets">Pallets/cont</th>
+                <th class="col-discount">Discount %</th>
+                <th class="col-exw">EXW</th>
+                <th class="col-fob">FOB</th>
+                <th class="col-cfr">CFR</th>
+                <th style="width:2%;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {# no default rows; user adds lines #}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if cache_updated_at %}
+  <div style="margin-top: 4px; text-align: right;">
+    <span style="font-size: 0.8rem; color: #777;">
+      آخر تحديث لإعدادات التسعير:
+      {{ cache_updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+      (version {{ cache_version }})
+    </span>
+  </div>
+{% endif %}
+
+<script>
+  const PRODUCTS = [
+    {% for p in products %}
+    {
+      id: {{ p[0] }},
+      code: "{{ p[1] }}",
+      micron: {{ p[2] }},
+      stretch: {{ p[3] }},
+      film_type: "{{ p[4] }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  const PALLET_TYPES = [
+    {% for pt in pallet_types %}
+    {id: {{ pt[0] }}, name: "{{ pt[1] }}"}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  const PACKING_TYPES = [
+    {% for t in packing_types %}
+    {id: {{ t[0] }}, name: "{{ t[1] }}"}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  let lineIndex = 0;
+
+  function createLineRow(existingData = null, existingResult = null) {
+    lineIndex += 1;
+    const tbody = document.querySelector("#lines-table tbody");
+    const tr = document.createElement("tr");
+
+    const exwValue = (existingResult && existingResult.discounted && existingResult.discounted.exw_display != null)
+      ? Number(existingResult.discounted.exw_display).toFixed(2)
+      : "";
+    const fobValue = (existingResult && existingResult.discounted && existingResult.discounted.fob_display != null)
+      ? Number(existingResult.discounted.fob_display).toFixed(2)
+      : "";
+    const cfrValue = (existingResult && existingResult.discounted && existingResult.discounted.cfr_display != null)
+      ? Number(existingResult.discounted.cfr_display).toFixed(2)
+      : "";
+
+    const productId = existingData ? (existingData.product_id || "") : "";
+    const palletId = existingData ? (existingData.pallet_type_id || "") : "";
+    const packingId = existingData ? (existingData.packing_type_id || "") : "";
+    const isColored = existingData ? !!existingData.is_colored : false;
+    const widthMm = existingData ? (existingData.width_mm || "") : "";
+    const rollsPerPallet = existingData ? (existingData.rolls_per_pallet || "") : "";
+    const rollKg = existingData ? (existingData.roll_weight_kg || "") : "";
+    const coreKg = existingData ? (existingData.core_weight_kg || "") : "";
+    const palletsCont = existingData ? (existingData.pallets_per_container || "") : "";
+    const lineDisc = existingData ? (existingData.discount_percent || "") : "";
+    const priceBasis = existingData ? (existingData.price_basis || "gross") : "gross";
+
+    tr.innerHTML = `
+      <td>${lineIndex}</td>
+      <td>
+        <select name="lines[${lineIndex}][product_id]" class="form-select form-select-sm pill-select">
+          <option value="" selected disabled>Select...</option>
+          ${PRODUCTS.map(p =>
+            `<option value="${p.id}" ${String(productId) === String(p.id) ? "selected" : ""}>
+              ${p.micron}µm – ${p.stretch}% – ${p.film_type}
+            </option>`
+          ).join("")}
+        </select>
+      </td>
+      <td>
+        <select name="lines[${lineIndex}][pallet_type_id]" class="form-select form-select-sm pill-select">
+          <option value="" selected disabled>Select...</option>
+          ${PALLET_TYPES.map(pt =>
+            `<option value="${pt.id}" ${String(palletId) === String(pt.id) ? "selected" : ""}>${pt.name}</option>`
+          ).join("")}
+        </select>
+      </td>
+      <td>
+        <select name="lines[${lineIndex}][packing_type_id]" class="form-select form-select-sm pill-select">
+          <option value="" selected disabled>Select...</option>
+          ${PACKING_TYPES.map(t =>
+            `<option value="${t.id}" ${String(packingId) === String(t.id) ? "selected" : ""}>${t.name}</option>`
+          ).join("")}
+        </select>
+      </td>
+      <td>
+        <select name="lines[${lineIndex}][price_basis]" class="form-select form-select-sm pill-select">
+          <option value="gross" ${priceBasis === "gross" ? "selected" : ""}>Gross kg</option>
+          <option value="net" ${priceBasis === "net" ? "selected" : ""}>Net kg</option>
+          <option value="roll" ${priceBasis === "roll" ? "selected" : ""}>Per roll</option>
+        </select>
+      </td>
+      <td class="col-colored">
+        <input type="checkbox" class="form-check-input"
+               name="lines[${lineIndex}][is_colored]" value="1" ${isColored ? "checked" : ""}>
+      </td>
+      <td class="text-end col-width">
+        <input type="number" step="1" min="0"
+              name="lines[${lineIndex}][width_mm]"
+              class="form-control form-control-sm pill-input compact-input"
+              value="${widthMm}"
+              onblur="checkWidthMm(this)">
+      </td>
+      <td class="text-end col-rolls">
+        <input type="number" step="1" min="0"
+               name="lines[${lineIndex}][rolls_per_pallet]"
+               class="form-control form-control-sm pill-input compact-input"
+               value="${rollsPerPallet}">
+      </td>
+      <td class="text-end col-rollkg">
+        <input type="number" step="0.001" min="0"
+               name="lines[${lineIndex}][roll_weight_kg]"
+               class="form-control form-control-sm pill-input compact-input"
+               value="${rollKg}">
+      </td>
+      <td class="text-end col-corekg">
+        <input type="number" step="0.001" min="0"
+               name="lines[${lineIndex}][core_weight_kg]"
+               class="form-control form-control-sm pill-input compact-input"
+               value="${coreKg}">
+      </td>
+      <td class="text-end col-pallets">
+        <input type="number" step="1" min="0"
+               name="lines[${lineIndex}][pallets_per_container]"
+               class="form-control form-control-sm pill-input compact-input"
+               value="${palletsCont}">
+      </td>
+      <td class="text-end col-discount">
+        <input type="number" step="0.01" min="0" max="100"
+               name="lines[${lineIndex}][discount_percent]"
+               class="form-control form-control-sm pill-input compact-input"
+               value="${lineDisc}">
+      </td>
+      <td class="text-end price-cell col-exw">
+        <input type="text"
+               class="form-control form-control-sm pill-input"
+               value="${exwValue}" readonly>
+      </td>
+      <td class="text-end price-cell col-fob">
+        <input type="text"
+               class="form-control form-control-sm pill-input"
+               value="${fobValue}" readonly>
+      </td>
+      <td class="text-end price-cell col-cfr">
+        <input type="text"
+               class="form-control form-control-sm pill-input"
+               value="${cfrValue}" readonly>
+      </td>
+      <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("add-row-btn").addEventListener("click", () => {
+    createLineRow();
+  });
+
+  document.querySelector("#lines-table tbody")
+    .addEventListener("click", (e) => {
+      if (e.target.closest(".remove-line-btn")) {
+        e.target.closest("tr").remove();
+      }
+    });
+
+  // زرار New quotation
+  document.getElementById("new-quotation-btn")
+    .addEventListener("click", () => {
+      const ok = confirm("Are you sure you want to clear this quotation and start a new one?");
+      if (!ok) return;
+
+      const tbody = document.querySelector("#lines-table tbody");
+      tbody.innerHTML = "";
+      lineIndex = 0;
+
+      const form = document.getElementById("quotation-form");
+
+      const portSelect = form.querySelector('select[name="port_id"]');
+      const destSelect = form.querySelector('select[name="destination_id"]');
+      const paymentSelect = form.querySelector('select[name="payment_term_id"]');
+      const globalDiscountInput = form.querySelector('input[name="discount_percent"]');
+      const customerNameInput = form.querySelector('input[name="customer_name"]');
+      const quotationNumberInput = form.querySelector('input[name="quotation_number"]');
+
+      if (portSelect) portSelect.selectedIndex = 0;
+      if (destSelect) destSelect.selectedIndex = 0;
+      if (paymentSelect) paymentSelect.selectedIndex = 0;
+      if (globalDiscountInput) globalDiscountInput.value = "";
+      if (customerNameInput) customerNameInput.value = "";
+      if (quotationNumberInput) quotationNumberInput.value = "";
+
+      fetch("{{ url_for('pricing.pricing_screen') }}?clear=1", {
+        method: "GET",
+        credentials: "same-origin"
+      });
+    });
+
+  const LINES_INPUT = {{ lines_input | tojson | safe }};
+  const LINES_RESULTS = {{ lines_results | tojson | safe }};
+
+  if (Array.isArray(LINES_INPUT) && LINES_INPUT.length > 0) {
+    for (let i = 0; i < LINES_INPUT.length; i++) {
+      const data = LINES_INPUT[i];
+      const res = Array.isArray(LINES_RESULTS) ? LINES_RESULTS[i] : null;
+      createLineRow(data, res);
+    }
+  }
+
+  const formEl = document.getElementById("quotation-form");
+
+  // منع reload واستخدام fetch + مؤشر تحميل على الزرار
+  const calcBtn = document.getElementById("calculate-btn");
+  const saveBtn = document.getElementById("save-btn");
+  const modeInput = document.getElementById("form-mode");
+
+  if (saveBtn && modeInput) {
+    saveBtn.addEventListener("click", function () {
+      modeInput.value = "save";
+      formEl.requestSubmit();
+    });
+  }
+
+  // أزرار Export: نغيّر الـ mode ونستخدم نفس الـ form
+  const exportPdfBtn = document.getElementById("export-pdf-btn");
+  const exportExcelBtn = document.getElementById("export-excel-btn");
+
+  if (exportPdfBtn && modeInput) {
+    exportPdfBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      modeInput.value = "export_pdf";
+      formEl.submit(); // submit عادي عشان ينزل PDF/يفتحه
+      modeInput.value = "calculate"; // نرجعه بعد السابمت
+    });
+  }
+
+  if (exportExcelBtn && modeInput) {
+    exportExcelBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      modeInput.value = "export_excel";
+      formEl.submit(); // submit عادي عشان ينزل ملف Excel
+      modeInput.value = "calculate";
+    });
+  }
+
+  function checkWidthMm(input) {
+    const val = parseFloat(input.value || 0);
+
+    if (!val) {
+      return;
+    }
+
+    if (val > 0 && val < 100) {
+      if (input.dataset.warnedWidthMm === "1") {
+        return;
+      }
+      input.dataset.warnedWidthMm = "1";
+      input.classList.add("is-invalid");
+      alert("Please enter a valid width in mm (e.g., 500 not 50).");
+    } else {
+      input.dataset.warnedWidthMm = "0";
+      input.classList.remove("is-invalid");
+    }
+  }
+
+  formEl.addEventListener("submit", function (e) {
+    const currentMode = modeInput ? modeInput.value : "calculate";
+
+    // في حالتي export_pdf/export_excel نخلي السابمت يمشي عادي (sync) عشان التحميل
+    if (currentMode === "export_pdf" || currentMode === "export_excel") {
+      return;
+    }
+
+    // باقي الأنماط (calculate/save) تفضل AJAX زي ما هي
+    e.preventDefault();
+
+    const formData = new FormData(formEl);
+
+    if (currentMode === "calculate" && calcBtn) {
+      calcBtn.disabled = true;
+      calcBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Calculating...';
+    }
+
+    if (currentMode === "save" && saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch("{{ url_for('pricing.pricing_screen') }}", {
+      method: "POST",
+      body: formData,
+      headers: {
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    })
+    .then(resp => {
+      console.log("RESP STATUS:", resp.status);
+      if (!resp.ok) {
+        return resp.text().then(text => {
+          console.log("ERROR BODY RAW:", text);
+          let err;
+          try {
+            err = JSON.parse(text);
+          } catch (e) {
+            err = { message: text || "Unknown error" };
+          }
+          throw err;
+        });
+      }
+      return resp.json();
+    })
+    .then(data => {
+      console.log("DATA:", data);
+      const tbody = document.querySelector("#lines-table tbody");
+      const rows = tbody.querySelectorAll("tr");
+
+      const qInput = document.querySelector('input[name="quotation_number"]');
+      if (qInput) {
+        qInput.classList.remove("is-invalid");
+      }
+
+      if (data.need_quotation_number) {
+        if (qInput) {
+          qInput.focus();
+          qInput.classList.add("is-invalid");
+        }
+        alert(data.message || "Please enter quotation number.");
+        return;
+      }
+
+      if (data.need_calculate_first) {
+        alert(data.message || "Please calculate pricing before saving.");
+        if (modeInput) modeInput.value = "calculate";  // رجّع المود
+        return;
+      }
+
+      if (data.lines_results) {
+        data.lines_results.forEach((lineRes, i) => {
+          const row = rows[i];
+          if (!row) return;
+          const exwInput = row.querySelector("td.col-exw input");
+          const fobInput = row.querySelector("td.col-fob input");
+          const cfrInput = row.querySelector("td.col-cfr input");
+          if (exwInput) exwInput.value = Number(lineRes.discounted.exw_display).toFixed(2);
+          if (fobInput) fobInput.value = Number(lineRes.discounted.fob_display).toFixed(2);
+          if (cfrInput) cfrInput.value = Number(lineRes.discounted.cfr_display).toFixed(2);
+        });
+      }
+
+      if (data.saved) {
+        alert(`Quotation saved. ID: ${data.quotation_id}, No: ${data.quotation_number || ""}`);
+        if (modeInput) modeInput.value = "calculate";
+      }
+    })
+    .catch(err => {
+      console.log("CATCH ERR:", err);
+      alert(err.message || err.error || "Request failed");
+    })
+    .finally(() => {
+      if (calcBtn) {
+        calcBtn.disabled = false;
+        calcBtn.innerHTML = '<i class="bi bi-lightning-charge"></i> Calculate';
+      }
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="bi bi-save"></i> Save';
+      }
+    });
+  });
+</script>
+
+{% endblock %}

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}Stretch Pricing{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+      /* Spinner overlay عام يغطي الصفحة كلها */
+      #global-spinner-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.15);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      #global-spinner-overlay .spinner-border {
+        width: 3rem;
+        height: 3rem;
+      }
+    </style>
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="bg-light">
+
+<div id="global-spinner-overlay">
+  <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+</div>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('pricing.pricing_screen') }}">Stretch Pricing</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNavbar">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <!-- شاشة التسعير الرئيسية -->
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'pricing.pricing_screen' %}active{% endif %}"
+             href="{{ url_for('pricing.pricing_screen') }}">
+            Pricing
+          </a>
+        </li>
+
+        <!-- إعدادات -->
+        {% if current_user.is_authenticated and current_user.role in ['admin','owner','sales_manager'] %}
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="settingsDropdown"
+             role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Settings
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="settingsDropdown">
+            {% if current_user.role in ['admin','owner'] %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('machines.index') }}">Machines</a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('products.index') }}">Products</a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('product_bom.overview') }}">BOM</a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            {% endif %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('materials.index') }}">Materials</a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('settings.shipping_settings') }}">
+                Shipping
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('settings.pricing_settings') }}">
+                Pricing rules
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('settings.costing_settings') }}">
+                Costing
+              </a>
+            </li>
+            {% if current_user.role in ['admin','owner'] %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('settings.packing_settings') }}">
+                Packing
+              </a>
+            </li>
+            {% endif %}
+
+          <li><hr class="dropdown-divider"></li>
+
+          <li>
+            <a class="dropdown-item" href="{{ url_for('monitoring.monitoring_report') }}">
+              Monitoring Report
+            </a>
+          </li>
+          </ul>
+        </li>
+        {% endif %}
+      </ul>
+
+      {# أزرار يمين النافبار #}
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        {# زر Sync settings — للأدمن فقط #}
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        <li class="nav-item me-2">
+          <button type="button"
+                  id="sync-btn"
+                  class="btn btn-sm btn-outline-light">
+            <i class="bi bi-arrow-repeat"></i> Sync settings
+          </button>
+        </li>
+        {% endif %}
+
+        {# زر Quotations — للأدوار المسموح لها #}
+        {% if current_user.is_authenticated and current_user.role in ['admin','owner','sales_manager','sales'] %}
+        <li class="nav-item me-2">
+          <a class="btn btn-sm btn-outline-light"
+             href="{{ url_for('pricing.quotations_list') }}">
+            <i class="bi bi-file-text"></i> Quotations
+          </a>
+        </li>
+        {% endif %}
+
+        {# زر Logout على يمين زر الكوتيشن #}
+        {% if current_user.is_authenticated %}
+        <li class="nav-item">
+          <a class="btn btn-sm btn-outline-light"
+             href="{{ url_for('auth.logout') }}">
+            <i class="bi bi-box-arrow-right"></i> Logout
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <main class="container my-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      // سبينر عام: يشتغل مع أي form submit أو link عليه data-show-spinner
+      (function () {
+        const overlay = document.getElementById('global-spinner-overlay');
+        if (!overlay) return;
+
+        function showSpinner() {
+          overlay.style.display = 'flex';
+        }
+
+        function hideSpinner() {
+          overlay.style.display = 'none';
+        }
+
+        // أي فورم في الصفحة
+        document.addEventListener('submit', function (e) {
+          // لو الفورم عليه data-no-spinner="1" نتجاهله (هنتعامل معه بالـ AJAX سكربت)
+          if (e.target && e.target.dataset.noSpinner === '1') {
+            return;
+          }
+          showSpinner();
+        });
+
+        // لينكات ممكن نختار نفعّل لها السبينر يدوي
+        document.addEventListener('click', function (e) {
+          const a = e.target.closest('a[data-show-spinner="1"]');
+          if (a) {
+            showSpinner();
+          }
+        });
+
+        // في حالة navigation سريع ورجوع بالـ back، نخفيه
+        window.addEventListener('pageshow', function () {
+          hideSpinner();
+        });
+      })();
+    </script>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.body.addEventListener("submit", async function (e) {
+        const form = e.target;
+
+        // نشتغل بس مع الفورمات اللي عليها الكلاس ده
+        if (!form.classList.contains("ajax-partial")) return;
+
+        // لو فيه رسالة تأكيد على الفورم
+        const confirmMessage = form.dataset.confirm;
+        if (confirmMessage) {
+          const ok = window.confirm(confirmMessage);
+          if (!ok) {
+            // المستخدم اختار Cancel -> نمنع السابميت ونوقف السبينر العام
+            e.preventDefault();
+            form.dataset.noSpinner = "1";
+            return;
+          }
+        }
+
+        e.preventDefault();
+        form.dataset.noSpinner = "1"; // عشان ما يشغّلاش السبينر العام
+
+        const submitBtn = form.querySelector("button[type=submit]");
+        const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+
+          const actionLabel =
+            submitBtn.dataset.loadingLabel ||
+            (submitBtn.textContent.trim() || "Saving...");
+
+          submitBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            ${actionLabel}
+          `;
+        }
+
+        try {
+          const resp = await fetch(form.action || window.location.href, {
+            method: form.method || "POST",
+            body: new FormData(form),
+            headers: {
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          });
+
+          if (!resp.ok) {
+            alert("Error saving. Please try again.");
+            return;
+          }
+
+          const html = await resp.text();
+          const targetId = form.dataset.updateTarget;
+          if (targetId) {
+            const wrapper = document.getElementById(targetId);
+            if (wrapper) {
+              const tmp = document.createElement("div");
+              tmp.innerHTML = html;
+              const newInner = tmp.querySelector("#" + targetId);
+              if (newInner) {
+                wrapper.innerHTML = newInner.innerHTML;
+              } else {
+                wrapper.innerHTML = html;
+              }
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Error saving. Please try again.");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+          }
+        }
+      });
+    });
+    </script>
+    
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const syncBtn = document.getElementById("sync-btn");
+      if (!syncBtn) return;
+
+      syncBtn.addEventListener("click", function () {
+        if (!confirm("Sync pricing settings from server?")) {
+          return;
+        }
+
+        syncBtn.disabled = true;
+        const originalHtml = syncBtn.innerHTML;
+        syncBtn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Syncing...';
+
+        fetch("{{ url_for('pricing.pricing_sync') }}", {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          credentials: "same-origin"
+        })
+        .then(resp => {
+          if (!resp.ok) {
+            throw new Error("Sync failed");
+          }
+          return resp.json();
+        })
+        .then(data => {
+          alert("Pricing settings synced. Next calculation will use the latest settings.");
+          // نعيد تحميل الصفحة عشان تشوف تاريخ آخر تحديث الجديد
+          window.location.reload();
+        })
+        .catch(err => {
+          alert(err.message || "Sync request failed");
+        })
+        .finally(() => {
+          syncBtn.disabled = false;
+          syncBtn.innerHTML = originalHtml;
+        });
+      });
+    });
+    </script>
+
+{% block scripts %}{% endblock %}
+  </body>
+</html>

@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+{% block title %}Product Settings - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <h2 class="mb-1">
+      Settings for {{ product[1] }} ({{ product[2] }} µm, {{ product[3] }}%)
+    </h2>
+    {% if product[4] %}
+      <span class="badge bg-primary">Pre-stretch</span>
+    {% endif %}
+  </div>
+  <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back to products
+  </a>
+</div>
+
+<div class="alert alert-info py-2 small mb-3" id="pricing-summary">
+  <div>
+    Raw cost (BOM, landed):
+    <span id="raw-cost-span">{{ "%.4f"|format(total_cost_per_kg) }}</span> USD/kg
+  </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="productSettingsTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="machines-tab"
+            data-bs-toggle="tab" data-bs-target="#machines-pane"
+            type="button" role="tab" aria-controls="machines-pane" aria-selected="true">
+      Machines
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="bom-tab"
+            data-bs-toggle="tab" data-bs-target="#bom-pane"
+            type="button" role="tab" aria-controls="bom-pane" aria-selected="false">
+      BOM
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="productSettingsTabsContent">
+  <!-- Machines tab -->
+  <div class="tab-pane fade show active" id="machines-pane"
+       role="tabpanel" aria-labelledby="machines-tab">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header py-2">
+        <strong>Add / Update machine mapping</strong>
+      </div>
+      <div class="card-body">
+        <!-- AJAX form: no global spinner -->
+        <form id="ps-machines-form" class="small" data-no-spinner="1">
+          <div class="mb-3">
+            <label class="form-label">Machine</label>
+            <select name="machine_id" id="ps-machine-id" class="form-select form-select-sm" required>
+              <option value="">-- Select machine --</option>
+              {% for m in machines %}
+              <option value="{{ m[0] }}">{{ m[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">kWh per kg</label>
+              <input type="number" name="kwh_per_kg"
+                     id="ps-kwh"
+                     class="form-control form-control-sm" min="0" step="0.0001" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Monthly product capacity (kg)</label>
+              <input type="number" name="monthly_product_capacity_kg"
+                     id="ps-capacity"
+                     class="form-control form-control-sm" min="1" step="1" required>
+            </div>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="preferred_machine" id="ps-preferred">
+            <label class="form-check-label" for="ps-preferred">
+              Preferred machine for this product
+            </label>
+          </div>
+
+          <div class="text-end">
+            <button type="submit" id="ps-machines-save-btn" class="btn btn-primary btn-sm">
+              Save mapping
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header py-2">
+        <strong>Existing mappings</strong>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Machine</th>
+              <th class="text-end">kWh/kg</th>
+              <th class="text-end">Capacity (kg/month)</th>
+              <th class="text-center">Preferred</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ps-mappings-tbody">
+            {% if mappings %}
+              {% for pm in mappings %}
+              <tr data-mapping-id="{{ pm[0] }}">
+                <td>{{ pm[1] }}</td>
+                <td class="text-end">{{ "%.4f"|format(pm[2]) }}</td>
+                <td class="text-end">{{ "{:,}".format(pm[3]) }}</td>
+                <td class="text-center">
+                  {% if pm[4] %}
+                    <span class="badge bg-success">Yes</span>
+                  {% else %}
+                    <span class="badge bg-secondary">No</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger ps-delete-mapping-btn"
+                          data-mapping-id="{{ pm[0] }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="ps-mappings-empty-row">
+                <td colspan="5" class="text-center text-muted py-3">
+                  No mappings yet.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOM tab -->
+  <div class="tab-pane fade" id="bom-pane"
+       role="tabpanel" aria-labelledby="bom-tab">
+    <div class="row g-3">
+      <!-- Left: Add / Update BOM item -->
+      <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header py-2">
+            <strong>Add / Update BOM item</strong>
+          </div>
+          <div class="card-body">
+            <form id="ps-bom-form" class="small" data-no-spinner="1">
+              <div class="mb-3">
+                <label class="form-label">Material</label>
+                <select name="material_id" id="ps-bom-material" class="form-select form-select-sm" required>
+                  <option value="">-- Select material --</option>
+                  {% for m in materials %}
+                    <option value="{{ m[0] }}">
+                      {{ m[3] }} - {{ m[1] }} | {{ m[2] }} ({{ "%.4f"|format(m[5]) }} USD/{{ m[4] }})
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Percentage (%)</label>
+                <input type="number" name="percentage" id="ps-bom-percentage"
+                       class="form-control form-control-sm"
+                       min="0" max="100" step="0.01" required>
+              </div>
+
+              <div class="alert alert-info py-2 small">
+                Adding an item with an existing material will
+                <strong>update</strong> its percentage.
+              </div>
+
+              <div class="text-end">
+                <button type="submit" id="ps-bom-save-btn" class="btn btn-primary btn-sm">
+                  Save item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Current BOM table -->
+      <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+          <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>Current BOM</strong>
+            <span class="small text-muted">
+              Scrap on BOM:
+              <span id="ps-bom-scrap-span">{{ "%.2f"|format(bom_scrap_percent) }}</span>%
+            </span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0 align-middle small">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-nowrap">Material</th>
+                    <th class="text-end text-nowrap">% mix</th>
+                    <th class="text-end text-nowrap">Price (USD/kg)</th>
+                    <th class="text-end text-nowrap">Cost (USD/kg)</th>
+                    <th class="text-center text-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="ps-bom-tbody">
+                  {% if bom_items %}
+                    {% for item in bom_items %}
+                      {% set pct = item[5] %}
+                      {% set price = item[8] %}
+                      {% set contrib = pct * price %}
+                      <tr data-item-id="{{ item[0] }}" data-material-id="{{ item[1] }}">
+                        <td class="text-nowrap">
+                          {{ item[4] }} - {{ item[2] }} | {{ item[3] }}
+                        </td>
+                        <td class="text-end">% {{ "%.2f"|format(pct * 100) }}</td>
+                        <td class="text-end">{{ "%.4f"|format(price) }}</td>
+                        <td class="text-end">{{ "%.4f"|format(contrib) }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-sm me-1 ps-bom-edit-btn"
+                                    data-material-id="{{ item[1] }}"
+                                    data-percentage="{{ '%.2f'|format(pct * 100) }}">
+                              <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-danger btn-sm ps-bom-delete-btn"
+                                    data-item-id="{{ item[0] }}">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr class="ps-bom-empty-row">
+                      <td colspan="5" class="text-center text-muted py-3">
+                        No BOM items yet.
+                      </td>
+                    </tr>
+                  {% endif %}
+                </tbody>
+                {% if bom_items %}
+                <tfoot class="table-light" id="ps-bom-tfoot">
+                  <tr class="fw-semibold">
+                    <th>Total</th>
+                    <th class="text-end" id="ps-bom-total-pct">
+                      {{ "%.2f"|format(total_pct * 100) }}%
+                    </th>
+                    <th></th>
+                    <th class="text-end" id="ps-bom-total-cost">
+                      {{ "%.4f"|format(total_cost) }}
+                    </th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+                {% else %}
+                <tfoot class="table-light d-none" id="ps-bom-tfoot">
+                  <tr class="fw-semibold">
+                    <th>Total</th>
+                    <th class="text-end" id="ps-bom-total-pct"></th>
+                    <th></th>
+                    <th class="text-end" id="ps-bom-total-cost"></th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+                {% endif %}
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div> <!-- /row -->
+  </div> <!-- /bom-pane -->
+</div> <!-- /tab-content -->
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // ----- Machines tab AJAX -----
+  const machinesForm = document.getElementById('ps-machines-form');
+  const machinesSaveBtn = document.getElementById('ps-machines-save-btn');
+  const mappingsTbody = document.getElementById('ps-mappings-tbody');
+
+  function renderMappingsTable(data) {
+    const mappings = data.mappings || [];
+    mappingsTbody.innerHTML = '';
+
+    if (!mappings.length) {
+      const tr = document.createElement('tr');
+      tr.classList.add('ps-mappings-empty-row');
+      tr.innerHTML = `
+        <td colspan="5" class="text-center text-muted py-3">
+          No mappings yet.
+        </td>
+      `;
+      mappingsTbody.appendChild(tr);
+      return;
+    }
+
+    mappings.forEach(pm => {
+      const tr = document.createElement('tr');
+      tr.dataset.mappingId = pm.id;
+      tr.innerHTML = `
+        <td>${pm.machine_name}</td>
+        <td class="text-end">${pm.kwh_per_kg.toFixed(4)}</td>
+        <td class="text-end">${pm.monthly_capacity.toLocaleString()}</td>
+        <td class="text-center">
+          ${
+            pm.preferred
+              ? '<span class="badge bg-success">Yes</span>'
+              : '<span class="badge bg-secondary">No</span>'
+          }
+        </td>
+        <td class="text-center">
+          <button type="button"
+                  class="btn btn-sm btn-outline-danger ps-delete-mapping-btn"
+                  data-mapping-id="${pm.id}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      `;
+      mappingsTbody.appendChild(tr);
+    });
+  }
+
+  machinesForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(machinesForm);
+
+    if (machinesSaveBtn) {
+      machinesSaveBtn.disabled = true;
+      machinesSaveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch("{{ url_for('product_settings.machines_save', product_id=product[0]) }}", {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+    .then(data => {
+      renderMappingsTable(data);
+      machinesForm.reset();
+      document.getElementById('ps-machine-id').focus();
+    })
+    .catch(err => {
+      alert(err.error || 'Saving mapping failed');
+    })
+    .finally(() => {
+      if (machinesSaveBtn) {
+        machinesSaveBtn.disabled = false;
+        machinesSaveBtn.innerHTML = 'Save mapping';
+      }
+    });
+  });
+
+  mappingsTbody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.ps-delete-mapping-btn');
+    if (!btn) return;
+
+    const mappingId = btn.dataset.mappingId;
+    if (!mappingId) return;
+
+    const ok = confirm('Delete this mapping?');
+    if (!ok) return;
+
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML =
+      '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+    fetch(
+      "{{ url_for('product_settings.machines_delete', product_id=product[0], mapping_id=0) }}"
+        .replace('0', mappingId),
+      {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      }
+    )
+    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+    .then(data => {
+      renderMappingsTable(data);
+    })
+    .catch(err => {
+      alert(err.error || 'Deleting mapping failed');
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    });
+  });
+
+  // ----- BOM tab AJAX -----
+  const bomForm = document.getElementById('ps-bom-form');
+  const bomSaveBtn = document.getElementById('ps-bom-save-btn');
+  const bomTbody = document.getElementById('ps-bom-tbody');
+  const bomTfoot = document.getElementById('ps-bom-tfoot');
+  const bomScrapSpan = document.getElementById('ps-bom-scrap-span');
+  const bomTotalPctCell = document.getElementById('ps-bom-total-pct');
+  const bomTotalCostCell = document.getElementById('ps-bom-total-cost');
+  const rawCostSpan = document.getElementById('raw-cost-span');
+
+  function renderBomTable(data) {
+    const items = data.items || [];
+    bomTbody.innerHTML = '';
+
+    if (!items.length) {
+      const tr = document.createElement('tr');
+      tr.classList.add('ps-bom-empty-row');
+      tr.innerHTML = `
+        <td colspan="5" class="text-center text-muted py-3">
+          No BOM items yet.
+        </td>
+      `;
+      bomTbody.appendChild(tr);
+      bomTfoot.classList.add('d-none');
+    } else {
+      items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.dataset.itemId = item.id;
+        tr.dataset.materialId = item.material_id;
+        tr.innerHTML = `
+          <td class="text-nowrap">
+            ${item.category} - ${item.material_code} | ${item.material_name}
+          </td>
+          <td class="text-end">% ${item.percentage.toFixed(2)}</td>
+          <td class="text-end">${item.price_per_kg.toFixed(4)}</td>
+          <td class="text-end">${item.contribution.toFixed(4)}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button type="button"
+                      class="btn btn-outline-primary btn-sm me-1 ps-bom-edit-btn"
+                      data-material-id="${item.material_id}"
+                      data-percentage="${item.percentage.toFixed(2)}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button type="button"
+                      class="btn btn-outline-danger btn-sm ps-bom-delete-btn"
+                      data-item-id="${item.id}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </td>
+        `;
+        bomTbody.appendChild(tr);
+      });
+
+      bomTfoot.classList.remove('d-none');
+      if (bomTotalPctCell) bomTotalPctCell.textContent = data.total_pct.toFixed(2) + '%';
+      if (bomTotalCostCell) bomTotalCostCell.textContent = data.total_cost.toFixed(4);
+    }
+
+    const scrapVal = data.bom_scrap_percent != null ? Number(data.bom_scrap_percent).toFixed(2) : '0.00';
+    if (bomScrapSpan) bomScrapSpan.textContent = scrapVal;
+
+    if (rawCostSpan && data.total_cost_per_kg != null) {
+      rawCostSpan.textContent = Number(data.total_cost_per_kg).toFixed(4);
+    }
+  }
+
+  bomForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(bomForm);
+
+    if (bomSaveBtn) {
+      bomSaveBtn.disabled = true;
+      bomSaveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch("{{ url_for('product_settings.bom_save', product_id=product[0]) }}", {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+    .then(data => {
+      renderBomTable(data);
+      const pctInput = document.getElementById('ps-bom-percentage');
+      if (pctInput) {
+        pctInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        pctInput.focus();
+      }
+    })
+    .catch(err => {
+      alert(err.error || 'Saving BOM item failed');
+    })
+    .finally(() => {
+      if (bomSaveBtn) {
+        bomSaveBtn.disabled = false;
+        bomSaveBtn.innerHTML = 'Save item';
+      }
+    });
+  });
+
+  bomTbody.addEventListener('click', function (e) {
+    const editBtn = e.target.closest('.ps-bom-edit-btn');
+    if (editBtn) {
+      const materialId = editBtn.dataset.materialId;
+      const pct = editBtn.dataset.percentage;
+      const matSelect = document.getElementById('ps-bom-material');
+      const pctInput = document.getElementById('ps-bom-percentage');
+      if (matSelect && materialId) matSelect.value = materialId;
+      if (pctInput) {
+        pctInput.value = pct;
+        pctInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        pctInput.focus();
+      }
+      return;
+    }
+
+    const deleteBtn = e.target.closest('.ps-bom-delete-btn');
+    if (deleteBtn) {
+      const itemId = deleteBtn.dataset.itemId;
+      if (!itemId) return;
+      const ok = confirm('Delete this item?');
+      if (!ok) return;
+
+      const originalHtml = deleteBtn.innerHTML;
+      deleteBtn.disabled = true;
+      deleteBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+      fetch(
+        "{{ url_for('product_settings.bom_delete', product_id=product[0], item_id=0) }}"
+          .replace('0', itemId),
+        {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        }
+      )
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        renderBomTable(data);
+      })
+      .catch(err => {
+        alert(err.error || 'Deleting BOM item failed');
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalHtml;
+      });
+    }
+  });
+});
+</script>
+{% endblock %}

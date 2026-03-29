@@ -1,0 +1,130 @@
+{# templates/pricing/quotations_list.html #}
+{% extends "base.html" %}
+{% block title %}Saved quotations{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h5 mb-0">Saved quotations</h2>
+    <a href="{{ url_for('pricing.pricing_screen') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg"></i> New quotation
+    </a>
+  </div>
+
+  <div class="row mb-2">
+    <div class="col-md-4 ms-auto">
+      <input type="text"
+             id="quotation-search"
+             class="form-control form-control-sm"
+             placeholder="Search by quotation no, customer, destination, port...">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body p-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="quotations-table">
+          <thead class="table-light">
+            <tr>
+              <th style="width:5%;">ID</th>
+              <th style="width:15%;">Quotation no.</th>
+              <th style="width:20%;">Customer</th>
+              <th style="width:20%;">Destination</th>
+              <th style="width:15%;">Loading port</th>
+              <th style="width:10%;">Payment term</th>
+              <th style="width:8%;">Global disc %</th>
+              <th style="width:10%;">Created at</th>
+              <th style="width:10%;">User</th>
+              <th style="width:7%;">Cost</th>   {# زرار الكوست #}
+            </tr>
+          </thead>
+          <tbody>
+          {% if quotations %}
+            {% for q in quotations %}
+              <tr>
+                <td>{{ q[0] }}</td>
+                <td>
+                  <a href="{{ url_for('pricing.quotation_pdf', quotation_id=q[0]) }}"
+                     target="_blank">
+                    {{ q[1] or q[0] }}
+                  </a>
+                </td>
+                <td>{{ q[2] or '' }}</td>
+                <td>
+                  {% if q[11] %}
+                    {{ q[11] }}{% if q[12] %} – {{ q[12] }}{% endif %}
+                  {% else %}
+                    {{ q[3] or '' }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if q[9] %}
+                    {{ q[9] }}{% if q[10] %} ({{ q[10] }}){% endif %}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>{{ q[13] or '' }}</td>
+                <td>
+                  {% if q[7] is not none %}
+                    {{ ('%.2f' % q[7]) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if q[8] %}
+                    {{ q[8].strftime('%Y-%m-%d %H:%M') }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {{ q[14] or '-' }}
+                </td>
+                <td>
+                  {% if current_user.is_authenticated and current_user.role in ['admin', 'owner'] %}
+                  <a href="{{ url_for('pricing.quotation_cost', quotation_id=q[0]) }}"
+                     class="btn btn-sm btn-outline-secondary"
+                     target="_blank">
+                    Cost
+                  </a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="10" class="text-center text-muted py-3">
+                No quotations saved yet.
+              </td>
+            </tr>
+          {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const searchInput = document.getElementById('quotation-search');
+  const table = document.getElementById('quotations-table');
+  if (!searchInput || !table) return;
+
+  const rows = table.querySelectorAll('tbody tr');
+
+  searchInput.addEventListener('keyup', function () {
+    const term = this.value.toLowerCase();
+    rows.forEach(function (row) {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.indexOf(term) !== -1 ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}

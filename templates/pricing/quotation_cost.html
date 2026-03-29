@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Cost breakdown {{ header[1] or header[0] }}</title>
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111827; }
+      h1, h2, h3, h4, p { margin: 0; padding: 0; }
+      .header { margin-bottom: 12pt; border-bottom: 1pt solid #999; padding-bottom: 6pt; }
+      .label { font-weight: bold; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 0.7pt solid #000; padding: 3pt 4pt; font-size: 8.5pt; }
+      th { background: #f0f0f0; }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .small { font-size: 8pt; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h2>Cost breakdown - Quotation {{ header[1] or header[0] }}</h2>
+      <p class="small">
+        <span class="label">Customer:</span> {{ header[2] or 'N/A' }}<br>
+        <span class="label">Destination:</span>
+        {% if header[11] %}
+          {{ header[11] }}{% if header[12] %} – {{ header[12] }}{% endif %}
+        {% else %}
+          {{ header[3] or '' }}
+        {% endif %}<br>
+        <span class="label">Loading port:</span>
+        {% if header[9] %}
+          {{ header[9] }}{% if header[10] %} ({{ header[10] }}){% endif %}
+        {% else %}
+          -
+        {% endif %}<br>
+        <span class="label">Payment term:</span>
+        {% if header[13] %}
+          {{ header[13] }}
+          {% if header[14] is not none %}
+            ({{ header[14] }} days)
+          {% endif %}
+          {% if credit_surcharge_percent and credit_surcharge_percent > 0 %}
+            – {{ '%.2f'|format(credit_surcharge_percent|float) }}%
+          {% endif %}
+        {% else %}
+          -
+        {% endif %}<br>
+        <span class="label">USD exchange rate:</span>
+        {% if header[16] %}
+          {{ '%.2f'|format(header[16]|float) }} EGP / USD
+        {% else %}
+          -
+        {% endif %}
+      </p>
+    </div>
+
+    <table id="cost-table" cellspacing="0" cellpadding="3"
+           style="width:100%; table-layout:fixed; -pdf-keep-in-frame-mode:shrink;">
+      <thead>
+        <tr>
+          <th style="width:3%;">#</th>
+          <th style="width:12%;">Product</th>
+          <th style="width:5%;">Basis</th>
+          <th style="width:5%;">Disc%</th>
+
+          <th style="width:7%;">RM /unit basis</th>
+          <th style="width:7%;">Energy /unit basis</th>
+          <th style="width:7%;">Machine OH /unit basis</th>
+          <th style="width:7%;">Film total cost /unit basis</th>
+
+          <th style="width:7%;">Unit weight net (kg)</th>
+          <th style="width:7%;">Pack+core /unit</th>
+          <th style="width:7%;">Total cost /unit</th>
+
+          <th style="width:5%;">Margin%</th>
+          <th style="width:5%;">Net Margin% (after discount)</th>
+          <th style="width:7%;">Margin value /unit</th>
+
+          <th style="width:7%;">Extra /unit</th>
+
+          {% if is_foreign_pricing %}
+            <th style="width:7%;">Foreign extra</th>
+          {% endif %}
+
+          {% if credit_surcharge_percent and credit_surcharge_percent > 0 %}
+            <th style="width:5%;">Credit%</th>
+          {% endif %}
+
+          <th style="width:7%;">EXW /unit</th>
+          <th style="width:7%;">FOB cost /unit</th>
+          <th style="width:7%;">FOB /unit</th>
+          <th style="width:7%;">Sea Freight cost /unit</th>
+          <th style="width:7%;">CFR /unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in breakdown_rows %}
+          {% set c = row.calc %}
+          {% set basis = (row.price_basis or 'gross') %}
+
+          <tr>
+            <td class="text-center">{{ loop.index }}</td>
+            <td>
+              {% set micron = row.product_micron %}
+              {% set stretch = row.product_stretch %}
+              {% set ft = row.product_film_type %}
+              {% if micron or stretch or ft %}
+                {% if micron %}{{ micron }}µm{% endif %}
+                {% if stretch %} / {{ stretch }}%{% endif %}
+                {% if ft %} / {{ ft }}{% endif %}
+              {% else %}
+                {{ row.product_id }}
+              {% endif %}
+            </td>
+            <td class="text-center">{{ basis }}</td>
+            <td class="text-right">
+              {{ '%.2f'|format((row.discount_percent or 0)|float) }}
+            </td>
+
+            <td class="text-right">
+              {{ '%.3f'|format((row.rm_cost_per_unit_basis or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.energy_cost_per_unit_basis or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.machine_oh_per_unit_basis or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.film_cost_per_unit_basis or 0)|float) }}
+            </td>
+
+            <td class="text-right">
+              {% if basis == 'roll' %}
+                {{ '%.3f'|format((row.unit_weight_net or 0)|float) }}
+              {% endif %}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.packing_core_cost_unit or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.total_cost_unit or 0)|float) }}
+            </td>
+
+            <td class="text-right">
+              {{ '%.2f'|format((row.margin_percent_base or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.2f'|format((row.margin_percent_net or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.margin_value_unit or 0)|float) }}
+            </td>
+
+            <td class="text-right">
+              {{ '%.3f'|format((row.extra_unit or 0)|float) }}
+            </td>
+
+            {% if is_foreign_pricing %}
+              <td class="text-right">
+                {{ row.foreign_extra_display }}
+              </td>
+            {% endif %}
+
+            {% if credit_surcharge_percent and credit_surcharge_percent > 0 %}
+              <td class="text-right">
+                {{ '%.2f'|format(credit_surcharge_percent|float) }}
+              </td>
+            {% endif %}
+            
+            <td class="text-right">
+              {{ '%.3f'|format((row.exw_unit or 0)|float) }}
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.fob_cost_unit or 0)|float) }}
+            </td>
+            <td class="text-right">
+              <div style="font-weight:bold; color:#059669;">
+                {{ '%.3f'|format((row.fob_unit or 0)|float) }}
+              </div>
+              <div class="small" style="color:#6b7280;">
+                {{ '%.3f'|format((row.fob_unit_base or 0)|float) }}
+              </div>
+            </td>
+            <td class="text-right">
+              {{ '%.3f'|format((row.sea_freight_cost_unit or 0)|float) }}
+            </td>
+            <td class="text-right">
+              <div style="font-weight:bold; color:#059669;">
+                {{ '%.3f'|format((row.cfr_unit or 0)|float) }}
+              </div>
+              <div class="small" style="color:#6b7280;">
+                {{ '%.3f'|format((row.cfr_unit_base or 0)|float) }}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="small" style="margin-top: 8pt;">
+      RM /unit basis, Energy /unit basis, Machine OH /unit basis and Film total cost /unit basis are expressed in the same pricing unit as the line basis (kg gross, kg net, or roll).<br>
+      Unit weight net (kg) = net film weight per unit (excluding core weight and all packing materials).<br>
+      Film total cost /unit basis = film total cost (per kg net) × Unit weight net, converted to the same pricing unit basis.<br>
+      Pack+core /unit = packing materials cost per unit (from packing_items) + core cost (core price per kg × core weight from the quotation), converted to the same basis.<br>
+      Total cost /unit = Film total cost /unit basis + Pack+core /unit.<br>
+      Margin% = base margin from pricing rules.<br>
+      Net Margin% (after discount) = Margin% − line discount%.<br>
+      Extra /unit comes from machine extras (color on gross, prestretch on net) converted to the same basis.<br>
+      EXW /unit = Total cost /unit + Margin value /unit + Extra /unit (after applying any payment term credit to the invoice price).<br>
+      FOB cost /unit and Sea Freight cost /unit are converted from cost per kg to the same pricing unit (kg gross, kg net, or roll), according to the line basis.<br>
+      FOB /unit = EXW /unit + FOB cost /unit, and CFR /unit = FOB /unit + Sea Freight cost /unit.<br>
+      All “/unit” values in this table follow the selected pricing basis for each line (kg gross, kg net, or roll).<br>
+      The green FOB/CFR /unit values are the final selling prices after applying any rounding on the gross kg unit price (where applicable).<br>
+      The small gray values under FOB /unit and CFR /unit are the raw prices before rounding, expressed in the same pricing unit basis as the line (kg gross, kg net, or roll).
+    </p>
+
+    <script>
+      (function () {
+        const table = document.getElementById('cost-table');
+        if (!table) return;
+
+        const tbody = table.tBodies[0];
+        if (!tbody) return;
+
+        const rows = tbody.rows;
+        let hasRoll = false;
+
+        for (const tr of rows) {
+          const basisCell = tr.cells[2];
+          if (!basisCell) continue;
+          const basisText = (basisCell.textContent || '').trim().toLowerCase();
+          if (basisText === 'roll') {
+            hasRoll = true;
+            break;
+          }
+        }
+
+        if (!hasRoll) {
+          const colIndex = 8; // Unit weight net (kg)
+          const allRows = table.rows;
+          for (const tr of allRows) {
+            if (tr.cells[colIndex]) {
+              tr.cells[colIndex].style.display = 'none';
+            }
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

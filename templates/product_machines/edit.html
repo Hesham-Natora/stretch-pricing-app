@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Product Machines - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h2>
+    Machines for product {{ product[1] }}
+    ({{ product[2] }} µm, {{ product[3] }}%)
+    {% if product[4] %}
+      <span class="badge bg-primary">Pre-stretch</span>
+    {% endif %}
+  </h2>
+</div>
+
+<div class="row">
+  <!-- Form to add/update mapping -->
+  <div class="col-lg-5 mb-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <strong>Add / Update machine mapping</strong>
+      </div>
+      <div class="card-body">
+        <!-- مهم: data-no-spinner عشان ما يشتغلش السبينر العام -->
+        <form id="machine-mapping-form"
+              method="post"
+              action="{{ url_for('product_machines.add_mapping', product_id=product[0]) }}"
+              data-no-spinner="1">
+          <div class="mb-3">
+            <label class="form-label">Machine</label>
+            <select name="machine_id" id="machineSelect" class="form-select" required>
+              <option value="">-- Select machine --</option>
+              {% for m in machines %}
+              <option value="{{ m[0] }}">{{ m[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">kWh per kg</label>
+            <input type="number" name="kwh_per_kg"
+                   id="kwhInput"
+                   class="form-control" min="0" step="0.0001" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Monthly product capacity (kg)</label>
+            <input type="number" name="monthly_product_capacity_kg"
+                   id="capacityInput"
+                   class="form-control" min="1" step="1" required>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input"
+                   type="checkbox"
+                   name="preferred_machine"
+                   id="preferred">
+            <label class="form-check-label" for="preferred">
+              Preferred machine for this product
+            </label>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary">
+              Back to products
+            </a>
+            <button type="submit" id="mapping-save-btn" class="btn btn-primary">
+              Save mapping
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Existing mappings -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <strong>Existing mappings</strong>
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Machine</th>
+              <th class="text-end">kWh/kg</th>
+              <th class="text-end">Capacity (kg/month)</th>
+              <th class="text-center">Preferred</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mappings-tbody">
+            {% if mappings %}
+              {% for pm in mappings %}
+              <tr data-mapping-id="{{ pm[0] }}">
+                <td>{{ pm[1] }}</td>
+                <td class="text-end">{{ "%.4f"|format(pm[2]) }}</td>
+                <td class="text-end">{{ "{:,}".format(pm[3]) }}</td>
+                <td class="text-center">
+                  {% if pm[4] %}
+                    <span class="badge bg-success">Yes</span>
+                  {% else %}
+                    <span class="badge bg-secondary">No</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger delete-mapping-btn"
+                          data-mapping-id="{{ pm[0] }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="mappings-empty-row">
+                <td colspan="5" class="text-center text-muted py-4">
+                  No mappings yet.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('machine-mapping-form');
+  const saveBtn = document.getElementById('mapping-save-btn');
+  const tbody = document.getElementById('mappings-tbody');
+
+  function renderMappingsTable(data) {
+    const mappings = data.mappings || [];
+    tbody.innerHTML = '';
+
+    if (!mappings.length) {
+      const tr = document.createElement('tr');
+      tr.classList.add('mappings-empty-row');
+      tr.innerHTML = `
+        <td colspan="5" class="text-center text-muted py-4">
+          No mappings yet.
+        </td>
+      `;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    mappings.forEach(pm => {
+      const tr = document.createElement('tr');
+      tr.dataset.mappingId = pm.id;
+      tr.innerHTML = `
+        <td>${pm.machine_name}</td>
+        <td class="text-end">${pm.kwh_per_kg.toFixed(4)}</td>
+        <td class="text-end">${pm.monthly_capacity.toLocaleString()}</td>
+        <td class="text-center">
+          ${
+            pm.preferred
+              ? '<span class="badge bg-success">Yes</span>'
+              : '<span class="badge bg-secondary">No</span>'
+          }
+        </td>
+        <td class="text-center">
+          <button type="button"
+                  class="btn btn-sm btn-outline-danger delete-mapping-btn"
+                  data-mapping-id="${pm.id}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // حفظ / تحديث mapping بدون reload
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch(form.action, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => {
+      if (!resp.ok) {
+        return resp.json().then(err => { throw err; });
+      }
+      return resp.json();
+    })
+    .then(data => {
+      renderMappingsTable(data);
+      // خليك واقف في نفس الفورم، بس رجّع الفوكس لأول حقل
+      form.reset();
+      document.getElementById('machineSelect').focus();
+    })
+    .catch(err => {
+      alert(err.error || 'Saving mapping failed');
+    })
+    .finally(() => {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save mapping';
+      }
+    });
+  });
+
+  // حذف mapping بدون reload
+  tbody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.delete-mapping-btn');
+    if (!btn) return;
+
+    const mappingId = btn.dataset.mappingId;
+    if (!mappingId) return;
+
+    const ok = confirm('Delete this mapping?');
+    if (!ok) return;
+
+    const url = "{{ url_for('product_machines.delete_mapping', mapping_id=0, product_id=product[0]) }}"
+      .replace('0', mappingId);
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => {
+      if (!resp.ok) {
+        return resp.json().then(err => { throw err; });
+      }
+      return resp.json();
+    })
+    .then(data => {
+      renderMappingsTable(data);
+    })
+    .catch(err => {
+      alert(err.error || 'Deleting mapping failed');
+    });
+  });
+});
+</script>
+{% endblock %}

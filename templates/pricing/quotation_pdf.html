@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Quotation {{ header[1] or header[0] }}</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10pt;
+        color: #111827;
+      }
+      h1, h2, h3, h4, p {
+        margin: 0;
+        padding: 0;
+      }
+      .header {
+        width: 100%;
+        margin-bottom: 12pt;
+        border-bottom: 1pt solid #999999;
+        padding-bottom: 6pt;
+      }
+      .header-left {
+        float: left;
+        width: 60%;
+      }
+      .header-right {
+        float: right;
+        width: 35%;
+        text-align: right;
+        font-size: 9pt;
+      }
+      .clearfix {
+        clear: both;
+      }
+      .label {
+        font-weight: bold;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      table.items {
+        width: 100%;
+        border: 0.7pt solid #000000;
+      }
+      table.items th,
+      table.items td {
+        border: 0.7pt solid #000000;
+        padding: 3pt 4pt;
+      }
+      table.items th {
+        background-color: #f0f0f0;
+        font-size: 9pt;
+      }
+      table.items td {
+        font-size: 9pt;
+      }
+      .text-right {
+        text-align: right;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .small {
+        font-size: 8pt;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- صورة الهيدر -->
+    <div style="margin-bottom: 8pt;">
+      <img src="{{ logo_rel_path }}" style="width: 100%; height: auto;">
+    </div>    
+    <div class="header">
+      <div class="header-left">
+        <h2>Quotation</h2>
+        <p class="small">
+          <span class="label">Customer:</span>
+          {{ header[2] or 'N/A' }}<br>
+          <span class="label">Destination:</span>
+          {% if header[11] %}
+            {{ header[11] }}{% if header[12] %} – {{ header[12] }}{% endif %}
+          {% else %}
+            {{ header[3] or '' }}
+          {% endif %}<br>
+          <span class="label">Loading port:</span>
+          {% if header[9] %}
+            {{ header[9] }}{% if header[10] %} ({{ header[10] }}){% endif %}
+          {% else %}
+            -
+          {% endif %}<br>
+          <span class="label">Payment term:</span>
+          {% if header[13] %}
+            {{ header[13] }}
+            {% if header[14] is not none %}
+              ({{ header[14] }} days)
+            {% endif %}
+          {% else %}
+            -
+          {% endif %}
+        </p>
+      </div>
+      <div class="header-right">
+        <p class="small">
+          <span class="label">Quotation no.:</span>
+          {{ header[1] or header[0] }}<br>
+          <span class="label">Date:</span>
+          {% if header[8] %}
+            {{ header[8].strftime('%Y-%m-%d') }}
+          {% else %}
+            -
+          {% endif %}<br>
+          <span class="label">Global discount %:</span>
+          {% if header[7] is not none %}
+            {{ '%.2f'|format(header[7]) }}
+          {% else %}
+            0.00
+          {% endif %}
+        </p>
+      </div>
+      <div class="clearfix"></div>
+    </div>
+
+    <table class="items" cellspacing="0" cellpadding="3"
+           style="width:100%; table-layout:fixed; -pdf-keep-in-frame-mode:shrink;">
+      <thead>
+        <tr>
+          <th style="width:4%;">#</th>
+          <th style="width:17%;">Product</th>
+          <th style="width:10%;">Pallet</th>
+          <th style="width:10%;">Packing</th>
+          <th style="width:6%;">Basis</th>
+          <th style="width:8%;">Colored</th>
+          <th style="width:7%;">Width</th>
+          <th style="width:7%;">Rolls</th>
+          <th style="width:6%;">Roll kg</th>
+          <th style="width:6%;">Core kg</th>
+          <th style="width:6%;">Disc%</th>
+          <th style="width:6%;">EXW</th>
+          <th style="width:6%;">FOB</th>
+          <th style="width:6%;">CFR</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in items %}
+        <tr>
+          <td class="text-center">{{ loop.index }}</td>
+          <td>
+            {# Product without code: micron / stretch / type #}
+            {% set micron = row[2] %}
+            {% set stretch = row[3] %}
+            {% set ft = row[4] %}
+            {% if micron or stretch or ft %}
+              {% if micron %}{{ micron }}µm{% endif %}
+              {% if stretch %} / {{ stretch }}%{% endif %}
+              {% if ft %} / {{ ft }}{% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>{{ row[13] or '' }}</td>
+          <td>{{ row[14] or '' }}</td>
+          <td class="text-center">{{ row[5] }}</td>
+          <td class="text-center" style="font-size:8pt;">
+            {% if row[12] %}
+              Color
+            {% else %}
+              Transparent
+            {% endif %}
+          </td>
+          <td class="text-right">{{ row[7] or '' }}</td>
+          <td class="text-right">{{ row[8] or '' }}</td>
+          <td class="text-right">
+            {% if row[9] is not none %}
+              {{ '%.2f'|format(row[9]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">{{ row[10] or '' }}</td>
+          <td class="text-right">
+            {% if row[11] is not none %}
+              {{ '%.2f'|format(row[11]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[15] is not none %}
+              {{ '%.2f'|format(row[15]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[16] is not none %}
+              {{ '%.2f'|format(row[16]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[17] is not none %}
+              {{ '%.2f'|format(row[17]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </body>
+</html>

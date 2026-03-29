@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Products - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-box-seam"></i> Products</h2>
+  <a href="{{ url_for('products.edit', product_id=0) }}" class="btn btn-success">
+    <i class="bi bi-plus-lg"></i> Add Product
+  </a>
+</div>
+
+<div class="card shadow">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Code</th>
+          <th>Film type</th>
+          <th class="text-end">Micron</th>
+          <th class="text-end">Stretchability (%)</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td>{{ p[1] }}</td>
+          <td>
+            {% if p[6] == 'standard' %}Standard
+            {% elif p[6] == 'regid' %}REGID
+            {% elif p[6] == 'power' %}Power
+            {% elif p[6] == 'power_plus' %}Power Plus
+            {% elif p[6] == 'uvi_6m' %}UVI (6 month)
+            {% elif p[6] == 'uvi_12m' %}UVI (12 month)
+            {% elif p[6] == 'prestretch' %}Prestretch
+            {% else %}{{ p[6] }}
+            {% endif %}
+          </td>
+          <td class="text-end">{{ p[2] }}</td>
+          <td class="text-end">{{ p[3] }}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <a href="{{ url_for('products.edit', product_id=p[0]) }}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{{ url_for('product_settings.index', product_id=p[0]) }}"
+                 class="btn btn-outline-secondary">
+                <i class="bi bi-gear"></i>
+              </a>
+              <a href="{{ url_for('products.delete', product_id=p[0]) }}"
+                 class="btn btn-outline-danger"
+                 onclick="return confirm('Delete this product?');">
+                <i class="bi bi-trash"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">
+            No products yet. Click “Add Product” to create one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+<div class="card shadow mb-3 mt-3 mt-lg-0">
+  <div class="card-body">
+    <h5 class="card-title mb-3">
+      {% if editing_machine_cost %}
+        Edit Machine Cost
+      {% else %}
+        Add Machine Cost
+      {% endif %}
+    </h5>
+    <form method="post"
+          action="{% if editing_machine_cost %}
+                    {{ url_for('settings.update_machine_cost', cost_id=editing_machine_cost[0]) }}
+                  {% else %}
+                    {{ url_for('settings.add_machine_cost') }}
+                  {% endif %}"
+          class="row g-3 ajax-partial"
+          data-update-target="machine-costs-block-wrapper">
+      <div class="col-md-3">
+        <label class="form-label">Machine</label>
+        <select name="machine_id" class="form-select" required>
+          <option value="">-- Select --</option>
+          {% for m in machines %}
+          <option value="{{ m[0] }}"
+                  {% if editing_machine_cost and editing_machine_cost[1] == m[0] %}selected{% endif %}>
+            {{ m[1] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Cost type</label>
+        <select name="cost_type" class="form-select" required>
+          <option value="">-- Select --</option>
+          <option value="fixed_monthly"
+                  {% if editing_machine_cost and editing_machine_cost[3] == 'fixed_monthly' %}selected{% endif %}>
+            Fixed monthly (EGP/month)
+          </option>
+          <option value="variable_per_kg"
+                  {% if editing_machine_cost and editing_machine_cost[3] == 'variable_per_kg' %}selected{% endif %}>
+            Variable per kg (EGP/kg)
+          </option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Amount (EGP)</label>
+        <input type="number"
+               step="0.001"
+               name="amount_egp"
+               class="form-control"
+               required
+               value="{% if editing_machine_cost %}{{ '%.3f'|format(editing_machine_cost[4]) }}{% endif %}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Description (optional)</label>
+        <input type="text"
+               name="description"
+               class="form-control"
+               value="{% if editing_machine_cost %}{{ editing_machine_cost[5] }}{% endif %}">
+      </div>
+      <div class="col-12 d-flex justify-content-end">
+        {% if editing_machine_cost %}
+          <button type="submit" class="btn btn-primary me-2">
+            Save Changes
+          </button>
+          <a href="{{ url_for('settings.costing_settings', tab='machine_costs') }}"
+             class="btn btn-outline-secondary">
+            Cancel
+          </a>
+        {% else %}
+          <button type="submit" class="btn btn-primary">
+            Add Cost
+          </button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Machine Costs</h5>
+    <div id="machine-costs-table-wrapper">
+      {% include "settings/_machine_costs_table.html" %}
+    </div>
+  </div>
+</div>

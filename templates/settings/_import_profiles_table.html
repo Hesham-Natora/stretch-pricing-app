@@ -1,0 +1,52 @@
+<div class="table-responsive">
+  <table class="table table-sm table-striped mb-0">
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th class="text-end">Value</th>
+        <th class="text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in import_profiles %}
+      <tr>
+        <td>
+          {% if p[3] == 'per_ton' %}
+            Per ton (USD/ton)
+          {% elif p[3] == 'percent' %}
+            Percent of invoice price
+          {% else %}
+            {{ p[3] }}
+          {% endif %}
+        </td>
+        <td class="text-end">
+          {% if p[3] == 'percent' %}
+            {{ "%.2f"|format(p[4]) }} %
+          {% else %}
+            {{ "%.4f"|format(p[4]) }}
+          {% endif %}
+        </td>
+        <td class="text-center">
+          <form method="post"
+                action="{{ url_for('settings.delete_import_profile', profile_id=p[0]) }}"
+                class="d-inline ajax-partial"
+                data-update-target="import-profiles-table-wrapper"
+                data-confirm="Delete this overhead?">
+            <button type="submit"
+                    class="btn btn-sm btn-outline-danger"
+                    data-loading-label="Deleting...">
+              Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="3" class="text-center text-muted">
+          No import overhead defined yet.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

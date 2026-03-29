@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Packing Settings - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div id="packing-page-wrapper">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-box-seam"></i> Packing Settings</h2>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="card shadow mb-3">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Packing Types</h5>
+          <form method="post"
+                action="{{ url_for('settings.add_packing_type') }}"
+                class="row g-2 ajax-partial"
+                data-update-target="packing-page-wrapper">
+            <div class="col-12">
+              <label class="form-label">Name</label>
+              <input type="text" name="name" class="form-control" placeholder="Automatic / Manual / ..." required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description (optional)</label>
+              <textarea name="description" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary btn-sm" data-loading-label="Saving...">
+                Add Type
+              </button>
+            </div>
+          </form>
+
+          <hr>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0 align-middle">
+              <thead>
+                <tr>
+                  <th>Packing type</th>
+                  <th>Pallet type</th>
+                  <th class="text-end">Cost / pallet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in packing_types %}
+                  {% for plt in pallet_types %}
+                    {% set key = (t[0], plt[0]) %}
+                    {% set cost_info = packing_costs.get(key) %}
+                    <tr>
+                      <td>{{ t[1] }}</td>
+                      <td>{{ plt[1] }}</td>
+                      <td class="text-end">
+                        {% if cost_info %}
+                          {{ "%.4f"|format(cost_info.total_cost_per_pallet) }}
+                        {% else %}
+                          0.0000
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                {% else %}
+                <tr>
+                  <td colspan="3" class="text-center text-muted">No packing types defined.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <small class="text-muted d-block mt-2">
+            * Cost / pallet = sum of (Qty per pallet × price_per_unit) for all items in this packing type & pallet type.
+          </small>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card shadow mb-3">
+        <div class="card-body">
+          <h5 class="card-title mb-3">
+            {% if editing_packing_item %}
+              Edit Packing Item
+            {% else %}
+              Add Packing Item per Pallet
+            {% endif %}
+          </h5>
+          <form method="post"
+                action="{% if editing_packing_item %}
+                           {{ url_for('settings.update_packing_item', item_id=editing_packing_item[0]) }}
+                         {% else %}
+                           {{ url_for('settings.add_packing_item') }}
+                         {% endif %}"
+                class="row g-3 ajax-partial"
+                data-update-target="packing-page-wrapper">
+            <div class="col-md-3">
+              <label class="form-label">Packing type</label>
+              <select name="packing_type_id" class="form-select" required>
+                <option value="">-- Select --</option>
+                {% for t in packing_types %}
+                <option value="{{ t[0] }}"
+                        {% if editing_packing_item and editing_packing_item[1] == t[0] %}selected{% endif %}>
+                  {{ t[1] }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Pallet type</label>
+              <select name="pallet_type_id" class="form-select" required>
+                <option value="">-- Select --</option>
+                {% for plt in pallet_types %}
+                <option value="{{ plt[0] }}"
+                        {% if editing_packing_item and editing_packing_item[2] == plt[0] %}selected{% endif %}>
+                  {{ plt[1] }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Material (PACKING)</label>
+              <select name="material_id" class="form-select" required>
+                <option value="">-- Select --</option>
+                {% for m in packing_materials %}
+                <option value="{{ m[0] }}"
+                        {% if editing_packing_item and editing_packing_item[3] == m[0] %}selected{% endif %}>
+                  {{ m[1] }} - {{ m[2] }} ({{ m[3] }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Qty per pallet</label>
+              <input type="number"
+                     step="0.001"
+                     name="quantity_per_pallet"
+                     class="form-control"
+                     value="{{ editing_packing_item[5] if editing_packing_item else '' }}"
+                     required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">Display name</label>
+              <input type="text"
+                     name="item_name"
+                     class="form-control"
+                     placeholder="Optional"
+                     value="{{ editing_packing_item[4] if editing_packing_item else '' }}">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary me-2"
+                      data-loading-label="{% if editing_packing_item %}Saving...{% else %}Saving...{% endif %}">
+                {% if editing_packing_item %}Save Changes{% else %}Add Item{% endif %}
+              </button>
+              {% if editing_packing_item %}
+              <a href="{{ url_for('settings.packing_settings') }}"
+                 class="btn btn-outline-secondary ajax-partial"
+                 data-update-target="packing-page-wrapper">
+                Cancel
+              </a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card shadow">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Packing Items per Pallet</h5>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Packing type</th>
+                  <th>Pallet type</th>
+                  <th>Material</th>
+                  <th class="text-end">Qty / pallet</th>
+                  <th class="text-end">Price / unit</th>
+                  <th class="text-end">Cost / pallet</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in packing_items %}
+                {# p: 0-id,1-packing_type_id,2-packing_type_name,3-pallet_type_id,4-pallet_type_name,
+                       5-material_id,6-item_name,7-material_code,8-unit,9-qty,10-price #}
+                <tr>
+                  <td>{{ p[2] }}</td>
+                  <td>{{ p[4] or '-' }}</td>
+                  <td>
+                    {{ p[7] }} - {{ p[6] }} ({{ p[8] }})
+                  </td>
+                  <td class="text-end">{{ "%.3f"|format(p[9]) }}</td>
+                  <td class="text-end">
+                    {% if p[10] is not none %}
+                      {{ "%.4f"|format(p[10]) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if p[10] is not none %}
+                      {{ "%.4f"|format(p[9] * p[10]) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <div class="d-flex justify-content-center">
+                      <form method="post"
+                            action="{{ url_for('settings.edit_packing_item_load', item_id=p[0]) }}"
+                            class="ajax-partial me-1"
+                            data-update-target="packing-page-wrapper">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-loading-label="Loading...">
+                          Edit
+                        </button>
+                      </form>
+
+                      <form method="post"
+                            action="{{ url_for('settings.delete_packing_item', item_id=p[0]) }}"
+                            class="ajax-partial"
+                            data-update-target="packing-page-wrapper"
+                            data-confirm="Delete this packing item?">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-danger"
+                                data-loading-label="Deleting...">
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7" class="text-center text-muted">No packing items defined.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <small class="text-muted d-block mt-2">
+            * Material price uses <strong>price_per_unit</strong> from Materials (currency as defined there).
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

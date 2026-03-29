@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3 text-center">Login</h2>
+
+        <form method="post" action="{{ url_for('auth.login') }}">
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <select name="username"
+                    class="form-select form-select-sm"
+                    required
+                    autofocus>
+              <option value="" disabled selected>Select user...</option>
+              {% for u in usernames %}
+              <option value="{{ u }}">{{ u }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <div class="input-group input-group-sm">
+              <input type="password"
+                     name="password"
+                     id="password-input"
+                     class="form-control"
+                     required>
+              <button type="button"
+                      class="btn btn-outline-secondary"
+                      id="toggle-password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm w-100 mb-2">
+            Login
+          </button>
+        </form>
+
+        <div class="text-center mt-2">
+          <a href="{{ url_for('auth.change_password_public') }}">
+            Change password
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const input = document.getElementById('password-input');
+  const btn = document.getElementById('toggle-password');
+  if (!input || !btn) return;
+
+  btn.addEventListener('click', function () {
+    const isPwd = input.type === 'password';
+    input.type = isPwd ? 'text' : 'password';
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.classList.toggle('bi-eye', !isPwd);
+      icon.classList.toggle('bi-eye-slash', isPwd);
+    }
+  });
+});
+</script>
+{% endblock %}

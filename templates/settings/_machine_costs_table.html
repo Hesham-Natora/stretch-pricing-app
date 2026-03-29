@@ -1,0 +1,55 @@
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle mb-0">
+    <thead>
+      <tr>
+        <th style="width: 22%;">Machine</th>
+        <th style="width: 18%;">Type</th>
+        <th class="text-end" style="width: 15%;">Amount (EGP)</th>
+        <th class="text-center" style="width: 35%;">Description</th>
+        <th class="text-center" style="width: 10%;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in machine_costs %}
+      <tr>
+        <td>{{ c[2] }}</td>
+        <td>
+          {% if c[3] == 'fixed_monthly' %}
+            Fixed monthly
+          {% elif c[3] == 'variable_per_kg' %}
+            Variable per kg
+          {% else %}
+            {{ c[3] }}
+          {% endif %}
+        </td>
+        <td class="text-end text-nowrap">{{ "%.2f"|format(c[4]) }}</td>
+        <td class="text-center">{{ c[5] }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('settings.edit_machine_cost', cost_id=c[0]) }}"
+             class="btn btn-sm btn-outline-secondary me-1">
+            Edit
+          </a>
+          <form method="post"
+                action="{{ url_for('settings.delete_machine_cost', cost_id=c[0]) }}"
+                class="d-inline ajax-partial"
+                data-update-target="machine-costs-block-wrapper"
+                data-confirm="Delete this cost item?">
+            <button type="submit"
+                    class="btn btn-sm btn-outline-danger"
+                    data-loading-label="Deleting...">
+              Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted">No machine costs defined.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<small class="text-muted d-block mt-2">
+  Fixed monthly costs are spread over machine output, and variable costs apply per produced kg.
+</small>

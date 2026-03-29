@@ -1,0 +1,326 @@
+{# templates/product_bom/edit.html بعد التعديل الكامل #}
+{% extends "base.html" %}
+{% block title %}Edit BOM - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-1">
+      BOM for {{ product[1] }} ({{ product[2] }} µm, {{ product[3] }}%)
+    </h2>
+  </div>
+  <a href="{{ url_for('product_bom.overview') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back to BOM overview
+  </a>
+</div>
+
+<div class="alert alert-info py-2 small mb-3" id="pricing-summary">
+  <div>
+    Raw cost (BOM, landed):
+    <span id="raw-cost-span">{{ "%.4f"|format(total_cost_per_kg) }}</span> USD/kg
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Left: Add / Update BOM item -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2">
+        <strong>Add / Update BOM item</strong>
+      </div>
+      <div class="card-body">
+        <!-- مهم: data-no-spinner=1 عشان السبينر العام ما يتدخلش -->
+        <form id="bom-form" method="post" class="small" data-no-spinner="1">
+          <div class="mb-3">
+            <label class="form-label">Material</label>
+            <select name="material_id" id="bomMaterialSelect" class="form-select form-select-sm" required>
+              <option value="">-- Select material --</option>
+              {% for m in materials %}
+                <option value="{{ m[0] }}">
+                  {{ m[3] }} - {{ m[1] }} | {{ m[2] }} ({{ "%.4f"|format(m[5]) }} USD/{{ m[4] }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Percentage (%)</label>
+            <input type="number" name="percentage" id="bomPercentageInput"
+                   class="form-control form-control-sm"
+                   min="0" max="100" step="0.01" required>
+          </div>
+
+          <div class="alert alert-info py-2 small mb-3">
+            Adding an item with an existing material will
+            <strong>update</strong> its percentage.
+          </div>
+
+          <div class="text-end">
+            <button type="submit" id="bom-save-btn" class="btn btn-primary btn-sm">
+              Save item
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Current BOM table -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>Current BOM</strong>
+        <span class="small text-muted">
+          Scrap on BOM:
+          <span id="bom-scrap-span-header">{{ "%.2f"|format(bom_scrap_percent) }}</span>%
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle small">
+            <thead class="table-light">
+              <tr>
+                <th class="text-nowrap">Material</th>
+                <th class="text-end text-nowrap">% mix</th>
+                <th class="text-end text-nowrap">Price (USD/kg)</th>
+                <th class="text-end text-nowrap">Cost (USD/kg)</th>
+                <th class="text-center text-nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bom-tbody">
+              {% if bom_items %}
+                {% for item in bom_items %}
+                  {% set pct = item[5] %}
+                  {% set price = item[8] %}
+                  {% set contrib = pct * price %}
+                  <tr data-item-id="{{ item[0] }}" data-material-id="{{ item[1] }}">
+                    <td class="text-nowrap">
+                      {{ item[4] }} - {{ item[2] }} | {{ item[3] }}
+                    </td>
+                    <td class="text-end">% {{ "%.2f"|format(pct * 100) }}</td>
+                    <td class="text-end">{{ "%.4f"|format(price) }}</td>
+                    <td class="text-end">{{ "%.4f"|format(contrib) }}</td>
+                    <td class="text-center">
+                      <div class="btn-group btn-group-sm">
+                        <button type="button"
+                                class="btn btn-outline-primary btn-sm me-1 edit-item-btn"
+                                data-material-id="{{ item[1] }}"
+                                data-percentage="{{ '%.2f'|format(pct * 100) }}">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-danger btn-sm delete-item-btn"
+                                data-item-id="{{ item[0] }}">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr class="bom-empty-row">
+                  <td colspan="5" class="text-center text-muted py-3">
+                    No BOM items yet.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+            {% if bom_items %}
+            <tfoot class="table-light" id="bom-tfoot">
+              <tr class="fw-semibold">
+                <th>Total</th>
+                <th class="text-end" id="bom-total-pct">
+                  {{ "%.2f"|format(total_pct * 100) }}%
+                </th>
+                <th></th>
+                <th class="text-end" id="bom-total-cost">
+                  {{ "%.4f"|format(total_cost) }}
+                </th>
+                <th></th>
+              </tr>
+            </tfoot>
+            {% else %}
+            <tfoot class="table-light d-none" id="bom-tfoot">
+              <tr class="fw-semibold">
+                <th>Total</th>
+                <th class="text-end" id="bom-total-pct"></th>
+                <th></th>
+                <th class="text-end" id="bom-total-cost"></th>
+                <th></th>
+              </tr>
+            </tfoot>
+            {% endif %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const materialSelect = document.getElementById('bomMaterialSelect');
+  const percentageInput = document.getElementById('bomPercentageInput');
+  const form = document.getElementById('bom-form');
+  const saveBtn = document.getElementById('bom-save-btn');
+  const tbody = document.getElementById('bom-tbody');
+  const tfoot = document.getElementById('bom-tfoot');
+  const scrapSpan = document.getElementById('bom-scrap-span');
+  const scrapSpanHeader = document.getElementById('bom-scrap-span-header');
+  const totalPctCell = document.getElementById('bom-total-pct');
+  const totalCostCell = document.getElementById('bom-total-cost');
+  const rawCostSpan = document.getElementById('raw-cost-span');
+
+  function renderBomTable(data) {
+    // data: { items: [...], total_pct, total_cost, bom_scrap_percent, total_cost_per_kg }
+    const items = data.items || [];
+
+    tbody.innerHTML = '';
+
+    if (!items.length) {
+      const tr = document.createElement('tr');
+      tr.classList.add('bom-empty-row');
+      tr.innerHTML = `
+        <td colspan="5" class="text-center text-muted py-3">
+          No BOM items yet.
+        </td>
+      `;
+      tbody.appendChild(tr);
+      tfoot.classList.add('d-none');
+    } else {
+      items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.dataset.itemId = item.id;
+        tr.dataset.materialId = item.material_id;
+        tr.innerHTML = `
+          <td class="text-nowrap">
+            ${item.category} - ${item.material_code} | ${item.material_name}
+          </td>
+          <td class="text-end">% ${item.percentage.toFixed(2)}</td>
+          <td class="text-end">${item.price_per_kg.toFixed(4)}</td>
+          <td class="text-end">${item.contribution.toFixed(4)}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button type="button"
+                      class="btn btn-outline-primary btn-sm me-1 edit-item-btn"
+                      data-material-id="${item.material_id}"
+                      data-percentage="${item.percentage.toFixed(2)}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button type="button"
+                      class="btn btn-outline-danger btn-sm delete-item-btn"
+                      data-item-id="${item.id}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tfoot.classList.remove('d-none');
+      if (totalPctCell) totalPctCell.textContent = data.total_pct.toFixed(2) + '%';
+      if (totalCostCell) totalCostCell.textContent = data.total_cost.toFixed(4);
+    }
+
+    const scrapVal = data.bom_scrap_percent != null ? Number(data.bom_scrap_percent).toFixed(2) : '0.00';
+    if (scrapSpan) scrapSpan.textContent = scrapVal;
+    if (scrapSpanHeader) scrapSpanHeader.textContent = scrapVal;
+
+    if (rawCostSpan && data.total_cost_per_kg != null) {
+      rawCostSpan.textContent = Number(data.total_cost_per_kg).toFixed(4);
+    }
+  }
+
+  // حفظ (Add / Update) بدون reload
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+    }
+
+    fetch(window.location.href, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(resp => {
+      if (!resp.ok) {
+        return resp.json().then(err => { throw err; });
+      }
+      return resp.json();
+    })
+    .then(data => {
+      renderBomTable(data);
+      percentageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      percentageInput.focus();
+    })
+    .catch(err => {
+      alert(err.error || 'Saving BOM item failed');
+    })
+    .finally(() => {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save item';
+      }
+    });
+  });
+
+  // زرار Edit (يعبّي الفورم) و Delete (AJAX)
+  tbody.addEventListener('click', function (e) {
+    const editBtn = e.target.closest('.edit-item-btn');
+    if (editBtn) {
+      const materialId = editBtn.dataset.materialId;
+      const pct = editBtn.dataset.percentage;
+      if (materialSelect && materialId) {
+        materialSelect.value = materialId;
+      }
+      if (percentageInput) {
+        percentageInput.value = pct;
+        percentageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        percentageInput.focus();
+      }
+      return;
+    }
+
+    const deleteBtn = e.target.closest('.delete-item-btn');
+    if (deleteBtn) {
+      const itemId = deleteBtn.dataset.itemId;
+      if (!itemId) return;
+      const ok = confirm('Delete this item?');
+      if (!ok) return;
+
+      fetch(
+        "{{ url_for('product_bom.delete_bom_item', item_id=0, product_id=product[0]) }}"
+          .replace('0', itemId),
+        {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        }
+      )
+      .then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(err => { throw err; });
+        }
+        return resp.json();
+      })
+      .then(data => {
+        renderBomTable(data);
+      })
+      .catch(err => {
+        alert(err.error || 'Deleting BOM item failed');
+      });
+    }
+  });
+});
+</script>
+{% endblock %}

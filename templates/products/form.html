@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if product else 'Add' }} Product - Stretch Pricing{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <div class="card shadow">
+      <div class="card-header">
+        <h5 class="mb-0">{{ 'Edit Product' if product else 'Add Product' }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+
+          {% if product %}
+          <div class="mb-3">
+            <label class="form-label">Code</label>
+            <input type="text" name="code" class="form-control"
+                   value="{{ product[1] }}" readonly>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label">Micron</label>
+            <input type="number" name="micron" class="form-control"
+                  step="1"
+                  value="{{ product[2] if product else '' }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Stretchability (%)</label>
+            <input type="number" name="stretchability" class="form-control"
+                  step="10"
+                  value="{{ product[3] if product else '' }}">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Film type</label>
+            <select name="film_type" class="form-select" required>
+              <option value="">-- Select film type --</option>
+              {% for value, label in film_types %}
+                <option value="{{ value }}"
+                        {% if product and product[6] == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">BOM scrap (%)</label>
+            <input type="number" name="bom_scrap_percent" class="form-control"
+                   min="0" max="100" step="0.01"
+                   value="{{ product[5] if product else '0.00' }}">
+            <div class="form-text">
+              Scrap applied at the BOM level for this product (affects material cost).
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Roll weight (kg)</label>
+            <input type="number" name="kg_per_roll" class="form-control"
+                   min="0" step="0.0001"
+                   value="{{ product[9] if product else '0.0000' }}">
+          </div>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="is_manual"
+                   name="is_manual"
+                   {% if product and product[7] %}checked{% endif %}>
+            <label class="form-check-label" for="is_manual">
+              Manual product (manual line)
+            </label>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="is_colored"
+                   name="is_colored"
+                   {% if product and product[8] %}checked{% endif %}>
+            <label class="form-check-label" for="is_colored">
+              Colored film
+            </label>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="is_prestretch"
+                   name="is_prestretch"
+                   {% if product and product[4] %}checked{% endif %}>
+            <label class="form-check-label" for="is_prestretch">Pre-stretch product</label>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
