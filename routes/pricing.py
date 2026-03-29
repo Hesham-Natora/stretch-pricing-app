@@ -24,7 +24,7 @@ from services.costing import (
     get_materials_landed_price_per_kg_bulk,
 )
 
-from xhtml2pdf import pisa
+#from xhtml2pdf import pisa
 from io import BytesIO
 from flask import make_response
 
@@ -1323,43 +1323,7 @@ def pricing_screen():
 
             # ===== فرع PDF =====
             if mode == "export_pdf":
-                import os
-
-                # مسار نسبي داخل المشروع
-                logo_rel_path = "static/img/quotation_header.png"                
-                print("LOGO_REL_PATH for PDF:", logo_rel_path)
-
-                html = render_template(
-                    "pricing/pricing_export_pdf.html",
-                    header=rich_header,
-                    lines_input=lines_input,
-                    lines_results=lines_results,
-                    products_lookup=products_lookup,
-                    pallets_lookup=pallets_lookup,
-                    packing_lookup=packing_lookup,
-                    ports_lookup=ports_lookup,
-                    dest_lookup=dest_lookup,
-                    payment_terms_lookup=payment_terms_lookup,
-                    logo_rel_path=logo_rel_path,
-                )
-
-                pdf_io = BytesIO()
-                pisa_status = pisa.CreatePDF(
-                    html,
-                    dest=pdf_io,
-                    encoding="utf-8",
-                )
-                if pisa_status.err:
-                    flash("Error while generating PDF.", "danger")
-                    return redirect(url_for("pricing.pricing_screen"))
-
-                pdf_io.seek(0)
-                response = make_response(pdf_io.read())
-                response.headers["Content-Type"] = "application/pdf"
-                response.headers[
-                    "Content-Disposition"
-                ] = 'attachment; filename="pricing_export.pdf"'
-                return response
+                return "PDF export is temporarily disabled on Render.", 503
 
             # ===== فرع Excel =====
             else:  # export_excel
@@ -2132,144 +2096,10 @@ def quotations_list():
     )
 
 @pricing_bp.route("/quotation/<int:quotation_id>/pdf", methods=["GET"])
-
 @login_required
 @roles_required("admin", "owner", "sales_manager", "sales")
-
 def quotation_pdf(quotation_id: int):
-    """
-    توليد PDF لكوتيشن محفوظة وفتحها في تبويب جديد.
-    يعتمد فقط على جداول quotations و quotation_items.
-    يستخدم xhtml2pdf.
-    """
-    with get_db() as cur:
-        # header
-        cur.execute(
-            """
-            SELECT
-                q.id,
-                q.quotation_number,
-                q.customer_name,
-                q.customer_country,
-                q.port_id,
-                q.destination_id,
-                q.payment_term_id,
-                q.global_discount_percent,
-                q.created_at,
-                q.created_by_user_id,
-                p.name AS port_name,
-                p.country AS port_country,
-                d.country AS dest_country,
-                COALESCE(d.city, '') AS dest_city,
-                pt.name AS payment_term_name,
-                pt.credit_days
-            FROM quotations q
-            LEFT JOIN ports p
-                ON q.port_id = p.id
-            LEFT JOIN destinations d
-                ON q.destination_id = d.id
-            LEFT JOIN payment_terms pt
-                ON q.payment_term_id = pt.id
-            WHERE q.id = %s
-            """,
-            (quotation_id,),
-        )
-        header = cur.fetchone()
-
-        if not header:
-            # نرجّعه لليستة بدل 404 صارخ
-            flash("Quotation not found.", "warning")
-            return redirect(url_for("pricing.quotations_list"))
-
-        q_created_by_user_id = header[9]  # حسب ترتيب الأعمدة أعلاه
-
-        # لو seller لا يرى إلا شغله
-        if current_user.role == "sales" and q_created_by_user_id != current_user.id:
-            flash("You are not authorized to view this quotation.", "warning")
-            return redirect(url_for("pricing.quotations_list"))
-
-        # عدّل الـ indices بعد إضافة created_by_user_id (shift +1 لكل ما بعده)
-        (
-            q_id,
-            quotation_number,
-            customer_name,
-            customer_country,
-            port_id,
-            destination_id,
-            payment_term_id,
-            global_discount_percent,
-            created_at,
-            _created_by_user_id,      # الجديد
-            port_name,
-            port_country,
-            dest_country,
-            dest_city,
-            payment_term_name,
-            credit_days,
-        ) = header
-
-        # items
-        cur.execute(
-            """
-            SELECT
-                qi.product_id,
-                pr.code,
-                pr.micron,
-                pr.stretchability_percent,
-                pr.film_type,
-                qi.price_basis,
-                qi.pallets_per_container,
-                qi.width_mm,
-                qi.rolls_per_pallet,
-                qi.roll_weight_kg,
-                qi.core_weight_kg,
-                qi.discount_percent,
-                qi.is_colored,
-                pt.name AS pallet_type_name,
-                pkt.name AS packing_type_name,
-                qi.exw_price,
-                qi.fob_price,
-                qi.cfr_price
-            FROM quotation_items qi
-            LEFT JOIN products pr
-                ON qi.product_id = pr.id
-            LEFT JOIN pallet_types pt
-                ON qi.pallet_type_id = pt.id
-            LEFT JOIN packing_types pkt
-                ON qi.packing_type_id = pkt.id
-            WHERE qi.quotation_id = %s
-            ORDER BY qi.id
-            """,
-            (quotation_id,),
-        )
-        items = cur.fetchall()
-    
-    # مسار نسبي للصورة داخل المشروع
-    logo_rel_path = "static/img/quotation_header.png"
-
-    html = render_template(
-        "pricing/quotation_pdf.html",
-        header=header,
-        items=items,
-        logo_rel_path=logo_rel_path,
-    )
-
-    pdf_io = BytesIO()
-    pisa_status = pisa.CreatePDF(
-        html,
-        dest=pdf_io,
-        encoding="utf-8"
-    )
-
-    if pisa_status.err:
-        return "Error while generating PDF", 500
-
-    pdf_io.seek(0)
-    filename = f"quotation_{header[1] or quotation_id}.pdf"
-    response = make_response(pdf_io.read())
-    response.headers["Content-Type"] = "application/pdf"
-    response.headers["Content-Disposition"] = f'inline; filename="{filename}"'
-    return response
+    return "PDF export is temporarily disabled on Render.", 503
 
 @pricing_bp.route("/quotation/<int:quotation_id>/cost", methods=["GET"])
 
