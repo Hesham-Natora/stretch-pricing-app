@@ -863,7 +863,7 @@ def add_machine_cost():
         )
 
     flash("Machine cost added.", "success")
-    print("DEBUG: bump from machine_costs", flush=True)
+    
     _bump_pricing_cache_version()
     
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))
@@ -994,7 +994,7 @@ def update_machine_cost(cost_id):
         )
 
     flash("Machine cost updated.", "success")
-    print("DEBUG: bump from machine_costs", flush=True)
+    
     _bump_pricing_cache_version()
     
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))
@@ -1023,7 +1023,7 @@ def delete_machine_cost(cost_id):
         )
 
     flash("Machine cost deleted.", "success")
-    print("DEBUG: bump from machine_costs", flush=True)
+    
     _bump_pricing_cache_version()
     
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))

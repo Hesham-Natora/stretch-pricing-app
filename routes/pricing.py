@@ -700,7 +700,6 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             machine_costs_map[int(mid)].append(
                 (cost_type, float(amount or 0))
             )
-    print("DEBUG: machine_costs_map =", machine_costs_map, flush=True)
     # --- products: basic info map ---
     cur.execute(
         """
