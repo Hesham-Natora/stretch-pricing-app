@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from db import get_db
 from pricing_cache import invalidate_material
 from routes.auth import roles_required
+from .settings import _bump_pricing_cache_version
 
 materials_bp = Blueprint(
     "materials", __name__, template_folder="../templates/materials"
@@ -74,6 +75,7 @@ def delete(material_id):
     with get_db() as cur:
         cur.execute("DELETE FROM materials WHERE id = %s", (material_id,))
     invalidate_material(material_id)
+    _bump_pricing_cache_version()
     flash("Material deleted.", "success")
     return redirect(url_for("materials.index"))
 
@@ -89,6 +91,7 @@ def delete_ajax(material_id):
     with get_db() as cur:
         cur.execute("DELETE FROM materials WHERE id = %s", (material_id,))
     invalidate_material(material_id)
+    _bump_pricing_cache_version()
 
     materials = _load_all_materials()
     materials_json = [_material_row_to_dict(m) for m in materials]
@@ -267,6 +270,7 @@ def save_ajax():
 
     saved_material_id = int(m[0])
     invalidate_material(saved_material_id)
+    _bump_pricing_cache_version()
 
     data = _material_row_to_dict(m)
     return jsonify({"message": msg, "material": data})
