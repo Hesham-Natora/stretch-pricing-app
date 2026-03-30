@@ -172,6 +172,8 @@ def machines_save(product_id):
             """,
             (product_id, machine_id, preferred, kwh_per_kg, monthly_capacity),
         )
+        
+    _bump_pricing_cache_version()
 
     machines, mappings = _load_machines_tab(product_id)
     mappings_json = []
@@ -201,6 +203,8 @@ def machines_delete(product_id, mapping_id):
 
     with get_db() as cur:
         cur.execute("DELETE FROM product_machines WHERE id = %s", (mapping_id,))
+        
+    _bump_pricing_cache_version()
 
     machines, mappings = _load_machines_tab(product_id)
     mappings_json = []
