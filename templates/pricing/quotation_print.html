@@ -163,23 +163,29 @@
           <p class="small">
             <span class="label">Customer:</span>
             {{ header[2] or 'N/A' }}<br>
+
             <span class="label">Destination:</span>
-            {% if header[11] %}
-              {{ header[11] }}{% if header[12] %} – {{ header[12] }}{% endif %}
+            {# dest_country = header[12], dest_city = header[13], customer_country fallback = header[3] #}
+            {% if header[12] %}
+              {{ header[12] }}{% if header[13] %} – {{ header[13] }}{% endif %}
             {% else %}
               {{ header[3] or '' }}
             {% endif %}<br>
+
             <span class="label">Loading port:</span>
-            {% if header[9] %}
-              {{ header[9] }}{% if header[10] %} ({{ header[10] }}){% endif %}
+            {# port_name = header[10], port_country = header[11] #}
+            {% if header[10] %}
+              {{ header[10] }}{% if header[11] %} ({{ header[11] }}){% endif %}
             {% else %}
               -
             {% endif %}<br>
+
             <span class="label">Payment term:</span>
-            {% if header[13] %}
-              {{ header[13] }}
-              {% if header[14] is not none %}
-                ({{ header[14] }} days)
+            {# payment_term_name = header[14], credit_days = header[15] #}
+            {% if header[14] %}
+              {{ header[14] }}
+              {% if header[15] is not none %}
+                ({{ header[15] }} days)
               {% endif %}
             {% else %}
               -
