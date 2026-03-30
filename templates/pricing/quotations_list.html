@@ -44,7 +44,7 @@
               <tr>
                 <td>{{ q[0] }}</td>
                 <td>
-                  <a href="{{ url_for('pricing.quotation_pdf', quotation_id=q[0]) }}"
+                  <a href="{{ url_for('pricing.quotation_print', quotation_id=q[0]) }}"
                      target="_blank">
                     {{ q[1] or q[0] }}
                   </a>

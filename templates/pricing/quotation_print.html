@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quotation {{ header[1] or header[0] }}</title>
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-margin: 12mm;
+    }
+
+    @page {
+      size: A4;
+      margin: var(--page-margin);
+    }
+
+    @media print {
+      body {
+        margin: 0;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .page {
+        box-shadow: none;
+        margin: 0;
+      }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #111827;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 16px;
+    }
+
+    .page {
+      width: var(--page-width);
+      min-height: var(--page-height);
+      margin: 0 auto;
+      background: #ffffff;
+      box-shadow: 0 0 4mm rgba(0,0,0,0.1);
+      padding: 10mm 10mm 16mm 10mm;
+      box-sizing: border-box;
+    }
+
+    h1, h2, h3, h4, p {
+      margin: 0;
+      padding: 0;
+    }
+
+    .toolbar {
+      margin: 0 auto 8px auto;
+      width: var(--page-width);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn-print {
+      padding: 6px 12px;
+      font-size: 10pt;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #111827;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .header-block {
+      width: 100%;
+      margin-bottom: 6pt;
+      page-break-inside: avoid;
+    }
+
+    .header {
+      width: 100%;
+      border-bottom: 1pt solid #999999;
+      padding-bottom: 4pt;
+      page-break-inside: avoid;
+    }
+
+    .header-left {
+      float: left;
+      width: 60%;
+    }
+
+    .header-right {
+      float: right;
+      width: 35%;
+      text-align: right;
+      font-size: 9pt;
+    }
+
+    .clearfix {
+      clear: both;
+    }
+
+    .label {
+      font-weight: bold;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    table.items {
+      border: 0.7pt solid #000000;
+      page-break-inside: auto;
+    }
+
+    table.items thead {
+      background-color: #f0f0f0;
+    }
+
+    table.items th,
+    table.items td {
+      border: 0.7pt solid #000000;
+      padding: 3pt 4pt;
+      font-size: 9pt;
+    }
+
+    table.items tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .small {
+      font-size: 8pt;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toolbar للطباعة -->
+  <div class="toolbar no-print">
+    <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <div class="page">
+    <div class="header-block">
+      <!-- صورة الهيدر -->
+      <div style="margin-bottom: 4pt;">
+        <img src="{{ logo_rel_path }}" style="width: 100%; height: auto;">
+      </div>
+
+      <div class="header">
+        <div class="header-left">
+          <h2>Quotation</h2>
+          <p class="small">
+            <span class="label">Customer:</span>
+            {{ header[2] or 'N/A' }}<br>
+            <span class="label">Destination:</span>
+            {% if header[11] %}
+              {{ header[11] }}{% if header[12] %} – {{ header[12] }}{% endif %}
+            {% else %}
+              {{ header[3] or '' }}
+            {% endif %}<br>
+            <span class="label">Loading port:</span>
+            {% if header[9] %}
+              {{ header[9] }}{% if header[10] %} ({{ header[10] }}){% endif %}
+            {% else %}
+              -
+            {% endif %}<br>
+            <span class="label">Payment term:</span>
+            {% if header[13] %}
+              {{ header[13] }}
+              {% if header[14] is not none %}
+                ({{ header[14] }} days)
+              {% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </p>
+        </div>
+        <div class="header-right">
+          <p class="small">
+            <span class="label">Quotation no.:</span>
+            {{ header[1] or header[0] }}<br>
+            <span class="label">Date:</span>
+            {% if header[8] %}
+              {{ header[8].strftime('%Y-%m-%d') }}
+            {% else %}
+              -
+            {% endif %}<br>
+            <span class="label">Global discount %:</span>
+            {% if header[7] is not none %}
+              {{ '%.2f'|format(header[7]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </p>
+        </div>
+        <div class="clearfix"></div>
+      </div>
+    </div>
+
+    <table class="items" cellspacing="0" cellpadding="3">
+      <thead>
+        <tr>
+          <th style="width:4%;">#</th>
+          <th style="width:17%;">Product</th>
+          <th style="width:10%;">Pallet</th>
+          <th style="width:10%;">Packing</th>
+          <th style="width:6%;">Basis</th>
+          <th style="width:8%;">Colored</th>
+          <th style="width:7%;">Width</th>
+          <th style="width:7%;">Rolls</th>
+          <th style="width:6%;">Roll kg</th>
+          <th style="width:6%;">Core kg</th>
+          <th style="width:6%;">Disc%</th>
+          <th style="width:6%;">EXW</th>
+          <th style="width:6%;">FOB</th>
+          <th style="width:6%;">CFR</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in items %}
+        <tr>
+          <td class="text-center">{{ loop.index }}</td>
+          <td>
+            {% set micron = row[2] %}
+            {% set stretch = row[3] %}
+            {% set ft = row[4] %}
+            {% if micron or stretch or ft %}
+              {% if micron %}{{ micron }}µm{% endif %}
+              {% if stretch %} / {{ stretch }}%{% endif %}
+              {% if ft %} / {{ ft }}{% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>{{ row[13] or '' }}</td>
+          <td>{{ row[14] or '' }}</td>
+          <td class="text-center">{{ row[5] }}</td>
+          <td class="text-center" style="font-size:8pt;">
+            {% if row[12] %}
+              Color
+            {% else %}
+              Transparent
+            {% endif %}
+          </td>
+          <td class="text-right">{{ row[7] or '' }}</td>
+          <td class="text-right">{{ row[8] or '' }}</td>
+          <td class="text-right">
+            {% if row[9] is not none %}
+              {{ '%.2f'|format(row[9]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">{{ row[10] or '' }}</td>
+          <td class="text-right">
+            {% if row[11] is not none %}
+              {{ '%.2f'|format(row[11]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[15] is not none %}
+              {{ '%.2f'|format(row[15]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[16] is not none %}
+              {{ '%.2f'|format(row[16]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+          <td class="text-right">
+            {% if row[17] is not none %}
+              {{ '%.2f'|format(row[17]) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

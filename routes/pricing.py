@@ -1321,9 +1321,24 @@ def pricing_screen():
             }
             print("RICH_HEADER:", rich_header)
 
-            # ===== فرع PDF =====
+            # ===== فرع Print-friendly بدلاً من PDF =====
             if mode == "export_pdf":
-                return "PDF export is temporarily disabled on Render.", 503
+                logo_rel_path = url_for("static", filename="img/quotation_header.png")
+
+                html = render_template(
+                    "pricing/pricing_print.html",
+                    header=rich_header,
+                    lines_input=lines_input,
+                    lines_results=lines_results,
+                    products_lookup=products_lookup,
+                    pallets_lookup=pallets_lookup,
+                    packing_lookup=packing_lookup,
+                    ports_lookup=ports_lookup,
+                    dest_lookup=dest_lookup,
+                    payment_terms_lookup=payment_terms_lookup,
+                    logo_rel_path=logo_rel_path,
+                )
+                return html
 
             # ===== فرع Excel =====
             else:  # export_excel
@@ -2095,11 +2110,120 @@ def quotations_list():
         quotations=quotations,
     )
 
-@pricing_bp.route("/quotation/<int:quotation_id>/pdf", methods=["GET"])
+@pricing_bp.route("/quotation/<int:quotation_id>/print", methods=["GET"])
 @login_required
 @roles_required("admin", "owner", "sales_manager", "sales")
-def quotation_pdf(quotation_id: int):
-    return "PDF export is temporarily disabled on Render.", 503
+def quotation_print(quotation_id: int):
+    """
+    عرض الكوتيشن في صفحة HTML قابلة للطباعة.
+    """
+    with get_db() as cur:
+        # header
+        cur.execute(
+            """
+            SELECT
+                q.id,
+                q.quotation_number,
+                q.customer_name,
+                q.customer_country,
+                q.port_id,
+                q.destination_id,
+                q.payment_term_id,
+                q.global_discount_percent,
+                q.created_at,
+                q.created_by_user_id,
+                p.name AS port_name,
+                p.country AS port_country,
+                d.country AS dest_country,
+                COALESCE(d.city, '') AS dest_city,
+                pt.name AS payment_term_name,
+                pt.credit_days
+            FROM quotations q
+            LEFT JOIN ports p
+                ON q.port_id = p.id
+            LEFT JOIN destinations d
+                ON q.destination_id = d.id
+            LEFT JOIN payment_terms pt
+                ON q.payment_term_id = pt.id
+            WHERE q.id = %s
+            """,
+            (quotation_id,),
+        )
+        header = cur.fetchone()
+
+        if not header:
+            flash("Quotation not found.", "warning")
+            return redirect(url_for("pricing.quotations_list"))
+
+        q_created_by_user_id = header[9]
+
+        if current_user.role == "sales" and q_created_by_user_id != current_user.id:
+            flash("You are not authorized to view this quotation.", "warning")
+            return redirect(url_for("pricing.quotations_list"))
+
+        (
+            q_id,
+            quotation_number,
+            customer_name,
+            customer_country,
+            port_id,
+            destination_id,
+            payment_term_id,
+            global_discount_percent,
+            created_at,
+            _created_by_user_id,
+            port_name,
+            port_country,
+            dest_country,
+            dest_city,
+            payment_term_name,
+            credit_days,
+        ) = header
+
+        # items
+        cur.execute(
+            """
+            SELECT
+                qi.product_id,
+                pr.code,
+                pr.micron,
+                pr.stretchability_percent,
+                pr.film_type,
+                qi.price_basis,
+                qi.pallets_per_container,
+                qi.width_mm,
+                qi.rolls_per_pallet,
+                qi.roll_weight_kg,
+                qi.core_weight_kg,
+                qi.discount_percent,
+                qi.is_colored,
+                pt.name AS pallet_type_name,
+                pkt.name AS packing_type_name,
+                qi.exw_price,
+                qi.fob_price,
+                qi.cfr_price
+            FROM quotation_items qi
+            LEFT JOIN products pr
+                ON qi.product_id = pr.id
+            LEFT JOIN pallet_types pt
+                ON qi.pallet_type_id = pt.id
+            LEFT JOIN packing_types pkt
+                ON qi.packing_type_id = pkt.id
+            WHERE qi.quotation_id = %s
+            ORDER BY qi.id
+            """,
+            (quotation_id,),
+        )
+        items = cur.fetchall()
+
+    logo_rel_path = url_for("static", filename="img/quotation_header.png")
+
+    return render_template(
+        "pricing/quotation_print.html",
+        header=header,
+        items=items,
+        logo_rel_path=logo_rel_path,
+    )
 
 @pricing_bp.route("/quotation/<int:quotation_id>/cost", methods=["GET"])
 

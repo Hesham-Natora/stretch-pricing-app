@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quotation {{ header.pricing_ref }}</title>
+  <style>
+    :root {
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-margin: 12mm;
+    }
+
+    @page {
+      size: A4;
+      margin: var(--page-margin);
+    }
+
+    @media print {
+      body {
+        margin: 0;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .page {
+        box-shadow: none;
+        margin: 0;
+      }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #111827;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 16px;
+    }
+
+    .page {
+      width: var(--page-width);
+      min-height: var(--page-height);
+      margin: 0 auto;
+      background: #ffffff;
+      box-shadow: 0 0 4mm rgba(0,0,0,0.1);
+      padding: 10mm 10mm 16mm 10mm;
+      box-sizing: border-box;
+    }
+
+    h1, h2, h3, h4, p {
+      margin: 0;
+      padding: 0;
+    }
+
+    .toolbar {
+      margin: 0 auto 8px auto;
+      width: var(--page-width);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn-print {
+      padding: 6px 12px;
+      font-size: 10pt;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #111827;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .header-block {
+      width: 100%;
+      margin-bottom: 6pt;
+      page-break-inside: avoid;
+    }
+
+    .header {
+      width: 100%;
+      border-bottom: 1pt solid #999999;
+      padding-bottom: 4pt;
+      page-break-inside: avoid;
+    }
+
+    .header-left {
+      float: left;
+      width: 60%;
+    }
+
+    .header-right {
+      float: right;
+      width: 35%;
+      text-align: right;
+      font-size: 9pt;
+    }
+
+    .clearfix {
+      clear: both;
+    }
+
+    .label {
+      font-weight: bold;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    table.items {
+      border: 0.7pt solid #000000;
+      page-break-inside: auto;
+    }
+
+    table.items thead {
+      background-color: #f0f0f0;
+    }
+
+    table.items th,
+    table.items td {
+      border: 0.7pt solid #000000;
+      padding: 3pt 4pt;
+      font-size: 9pt;
+    }
+
+    table.items tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .small {
+      font-size: 8pt;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toolbar للطباعة -->
+  <div class="toolbar no-print">
+    <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <div class="page">
+    <div class="header-block">
+      <!-- صورة الهيدر -->
+      <div style="margin-bottom: 4pt;">
+        <img src="{{ logo_rel_path }}" style="width: 100%; height: auto;">
+      </div>
+
+      <div class="header">
+        <div class="header-left">
+          <h2>Quotation</h2>
+          <p class="small">
+            <span class="label">Customer:</span>
+            {{ header.customer_name or 'N/A' }}<br>
+            <span class="label">Destination:</span>
+            {% if header.dest_country %}
+              {{ header.dest_country }}{% if header.dest_city %} – {{ header.dest_city }}{% endif %}
+            {% else %}
+              -
+            {% endif %}<br>
+            <span class="label">Loading port:</span>
+            {% if header.port_name %}
+              {{ header.port_name }}{% if header.port_country %} ({{ header.port_country }}){% endif %}
+            {% else %}
+              -
+            {% endif %}<br>
+            <span class="label">Payment term:</span>
+            {% if header.payment_term_name %}
+              {{ header.payment_term_name }}
+              {% if header.payment_term_days is not none %}
+                ({{ header.payment_term_days }} days)
+              {% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </p>
+        </div>
+        <div class="header-right">
+          <p class="small">
+            <span class="label">Quotation no.:</span>
+            {{ header.pricing_ref }}<br>
+            <span class="label">Date:</span>
+            {% if header.created_at %}
+              {{ header.created_at.strftime('%Y-%m-%d') }}
+            {% else %}
+              -
+            {% endif %}<br>
+            <span class="label">Global discount %:</span>
+            {% if header.discount_percent is not none %}
+              {{ '%.2f'|format(header.discount_percent) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </p>
+        </div>
+        <div class="clearfix"></div>
+      </div>
+    </div>
+
+    <table class="items" cellspacing="0" cellpadding="3">
+      <thead>
+        <tr>
+          <th style="width:4%;">#</th>
+          <th style="width:17%;">Product</th>
+          <th style="width:10%;">Pallet</th>
+          <th style="width:10%;">Packing</th>
+          <th style="width:6%;">Basis</th>
+          <th style="width:8%;">Colored</th>
+          <th style="width:7%;">Width</th>
+          <th style="width:7%;">Rolls</th>
+          <th style="width:6%;">Roll kg</th>
+          <th style="width:6%;">Core kg</th>
+          <th style="width:6%;">Disc%</th>
+          <th style="width:6%;">EXW</th>
+          <th style="width:6%;">FOB</th>
+          <th style="width:6%;">CFR</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for line in lines_input %}
+        {% set res = lines_results[loop.index0] %}
+        <tr>
+          <td class="text-center">{{ loop.index }}</td>
+
+          <td>
+            {% set pid = line.product_id if line.product_id is not none else line["product_id"] %}
+            {% set p = products_lookup.get(pid|int) if products_lookup is defined else None %}
+            {% if p %}
+              {% set micron = p.micron if p.micron is not none else p["micron"] %}
+              {% set stretch = p.stretch if p.stretch is not none else p["stretch"] %}
+              {% set ft = p.film_type if p.film_type is not none else p["film_type"] %}
+              {% if micron or stretch or ft %}
+                {% if micron %}{{ micron }}µm{% endif %}
+                {% if stretch %} / {{ stretch }}%{% endif %}
+                {% if ft %} / {{ ft }}{% endif %}
+              {% else %}
+                {{ p.code or pid }}
+              {% endif %}
+            {% else %}
+              {{ pid }}
+            {% endif %}
+          </td>
+
+          <td>
+            {% set pal_id = line.pallet_type_id if line.pallet_type_id is not none else line["pallet_type_id"] %}
+            {% if pallets_lookup is defined %}
+              {{ pallets_lookup.get(pal_id|int, pal_id) }}
+            {% else %}
+              {{ pal_id }}
+            {% endif %}
+          </td>
+
+          <td>
+            {% set pack_id = line.packing_type_id if line.packing_type_id is not none else line["packing_type_id"] %}
+            {% if packing_lookup is defined %}
+              {{ packing_lookup.get(pack_id|int, pack_id) }}
+            {% else %}
+              {{ pack_id }}
+            {% endif %}
+          </td>
+
+          <td class="text-center">{{ line.price_basis or line["price_basis"] }}</td>
+
+          <td class="text-center" style="font-size:8pt;">
+            {% if line.is_colored or line["is_colored"] %}
+              Color
+            {% else %}
+              Transparent
+            {% endif %}
+          </td>
+
+          <td class="text-right">{{ line.width_mm or line["width_mm"] }}</td>
+          <td class="text-right">{{ line.rolls_per_pallet or line["rolls_per_pallet"] }}</td>
+
+          <td class="text-right">
+            {% set rw = line.roll_weight_kg if line.roll_weight_kg is not none else line["roll_weight_kg"] %}
+            {% if rw is not none %}
+              {{ '%.2f'|format(rw|float) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+
+          <td class="text-right">
+            {% set cw = line.core_weight_kg if line.core_weight_kg is not none else line["core_weight_kg"] %}
+            {% if cw is not none %}
+              {{ '%.2f'|format(cw|float) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+
+          <td class="text-right">
+            {% set ld = line.discount_percent if line.discount_percent is not none else line["discount_percent"] %}
+            {% if ld %}
+              {{ '%.2f'|format(ld|float) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+
+          <td class="text-right">
+            {% set exw = res.discounted.exw_display if res.discounted is not none else res["discounted"]["exw_display"] %}
+            {{ '%.2f'|format(exw|float if exw is not none else 0) }}
+          </td>
+
+          <td class="text-right">
+            {% set fob = res.discounted.fob_display if res.discounted is not none else res["discounted"]["fob_display"] %}
+            {{ '%.2f'|format(fob|float if fob is not none else 0) }}
+          </td>
+
+          <td class="text-right">
+            {% set cfr = res.discounted.cfr_display if res.discounted is not none else res["discounted"]["cfr_display"] %}
+            {{ '%.2f'|format(cfr|float if cfr is not none else 0) }}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

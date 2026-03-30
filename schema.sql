@@ -331,3 +331,9 @@ CREATE TABLE IF NOT EXISTS quotation_item_cost_snapshots (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS pricing_cache_control (
+    id           SERIAL PRIMARY KEY,
+    cache_version INTEGER NOT NULL DEFAULT 1,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
