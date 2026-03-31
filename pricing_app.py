@@ -1,6 +1,6 @@
 # pricing_app.py
 import os
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, jsonify
 from dotenv import load_dotenv
 from db import get_db
 from routes.pricing import load_pricing_static_data
