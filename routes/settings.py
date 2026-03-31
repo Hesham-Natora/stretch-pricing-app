@@ -852,6 +852,8 @@ def add_machine_cost():
             """
         )
         machines = cur.fetchall()
+        
+    _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         # نرجّع البلوك الكامل (فورم + جدول) والفورم في وضع Add
@@ -864,7 +866,6 @@ def add_machine_cost():
 
     flash("Machine cost added.", "success")
     
-    _bump_pricing_cache_version()
     
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))
 
@@ -983,6 +984,8 @@ def update_machine_cost(cost_id):
             """
         )
         machines = cur.fetchall()
+        
+    _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         # بعد الحفظ نرجّع الفورم لوضع Add
@@ -994,9 +997,7 @@ def update_machine_cost(cost_id):
         )
 
     flash("Machine cost updated.", "success")
-    
-    _bump_pricing_cache_version()
-    
+        
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))
 
 
@@ -1013,6 +1014,8 @@ def delete_machine_cost(cost_id):
             """
         )
         machines = cur.fetchall()
+        
+    _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render_template(
@@ -1023,9 +1026,7 @@ def delete_machine_cost(cost_id):
         )
 
     flash("Machine cost deleted.", "success")
-    
-    _bump_pricing_cache_version()
-    
+        
     return redirect(url_for("settings.costing_settings", tab="machine_costs"))
 
 # -------- Actions for Landed Cost Overhead --------
