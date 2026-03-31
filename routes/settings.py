@@ -1255,6 +1255,8 @@ def delete_packing_type(type_id):
             packing_items,
             packing_costs,
         ) = _load_packing_context(cur)
+        
+    _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render_template(
@@ -1268,7 +1270,6 @@ def delete_packing_type(type_id):
             editing_packing_item=None,
         )
         
-    _bump_pricing_cache_version()
 
     flash("Packing type deleted.", "success")
     return redirect(url_for("settings.packing_settings"))
@@ -1355,6 +1356,8 @@ def delete_packing_item(item_id):
             packing_items,
             packing_costs,
         ) = _load_packing_context(cur)
+        
+    _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render_template(
@@ -1368,7 +1371,6 @@ def delete_packing_item(item_id):
             editing_packing_item=None,
         )
         
-    _bump_pricing_cache_version()
 
     flash("Packing item deleted.", "success")
     return redirect(url_for("settings.packing_settings"))
