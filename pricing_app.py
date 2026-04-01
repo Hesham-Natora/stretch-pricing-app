@@ -1,6 +1,6 @@
 # pricing_app.py
 import os
-from flask import Flask, redirect, url_for, jsonify
+from flask import Flask, redirect, url_for, jsonify, request
 from dotenv import load_dotenv
 from db import get_db
 from routes.pricing import load_pricing_static_data
@@ -71,6 +71,13 @@ def create_app():
     @app.route("/health", methods=["GET"])
     def health_check():
         return jsonify(status="ok"), 200
+    
+    @app.after_request
+    def add_cache_headers(response):
+        if request.path.startswith("/static/"):
+            response.cache_control.public = True
+            response.cache_control.max_age = 60 * 60 * 24 * 30  # 30 يوم
+        return response
 
     return app
 
