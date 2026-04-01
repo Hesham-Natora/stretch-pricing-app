@@ -424,11 +424,24 @@
       <td>
         <select name="lines[${lineIndex}][product_id]" class="form-select form-select-sm pill-select">
           <option value="" selected disabled>Select...</option>
-          ${PRODUCTS.map(p =>
-            `<option value="${p.id}" ${String(productId) === String(p.id) ? "selected" : ""}>
-              ${p.micron}µm – ${p.stretch}% – ${p.film_type}
-            </option>`
-          ).join("")}
+          ${PRODUCTS.map(p => {
+            const parts = [];
+            if (p.micron != null) {
+              parts.push(`${p.micron}µm`);
+            }
+            if (p.stretch && Number(p.stretch) !== 0) {
+              parts.push(`${p.stretch}%`);
+            }
+            if (p.film_type) {
+              parts.push(p.film_type);
+            }
+            const label = parts.join(" – ");
+            return `
+              <option value="${p.id}" ${String(productId) === String(p.id) ? "selected" : ""}>
+                ${label}
+              </option>
+            `;
+          }).join("")}
         </select>
       </td>
       <td>
