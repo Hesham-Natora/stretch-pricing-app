@@ -32,10 +32,12 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center" href="{{ url_for('pricing.pricing_screen') }}">
-      <img src="{{ url_for('static', filename='img/logo.png') }}"
-          alt="Stretch Pricing"
-          style="height:28px; width:auto;"
-          class="me-2">
+      <div style="height:28px; width:28px;"
+          class="me-2 d-flex align-items-center justify-content-center">
+        <img src="{{ url_for('static', filename='img/logo.png') }}"
+            alt="Stretch Pricing"
+            style="max-height:100%; max-width:100%; display:block;">
+      </div>
       <span>Stretch Pricing</span>
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
