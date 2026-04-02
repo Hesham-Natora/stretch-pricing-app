@@ -199,7 +199,7 @@ def save_ajax():
     if unit_type == "weight":
         if unit.lower() in ("ton", "tonne", "t"):
             price_per_unit = price_input / 1000.0
-            store_unit = "Ton"
+            store_unit = "kg"
         elif unit.lower() in ("kg", "kilogram"):
             price_per_unit = price_input
             store_unit = "kg"
