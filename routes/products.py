@@ -8,13 +8,15 @@ products_bp = Blueprint("products", __name__, template_folder="../templates/prod
 
 
 FILM_TYPES = [
-    ("standard", "Standard"),
-    ("regid", "REGID"),
-    ("power", "Power"),
-    ("power_plus", "Power Plus"),
-    ("uvi_6m", "UVI (6 month)"),
-    ("uvi_12m", "UVI (12 month)"),
-    ("prestretch", "Prestretch"),
+    ("Standard", "Standard"),
+    ("Super_Rigid", "Super RIGID"),
+    ("Regular_Rigid", "Regular RIGID"),
+    ("Power", "Power"),
+    ("Power_Plus", "Power Plus"),
+    ("UVI_6m", "UVI (6 month)"),
+    ("UVI_12m", "UVI (12 month)"),
+    ("UV_Rigid", "UV&Rigid"),
+    ("Prestretch", "Prestretch"),
 ]
 
 
