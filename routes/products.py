@@ -19,7 +19,6 @@ FILM_TYPES = [
     ("Prestretch", "Prestretch"),
 ]
 
-
 def generate_product_code(cur) -> str:
     """
     Generate next product code like P0001, P0002...

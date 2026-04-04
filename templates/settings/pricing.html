@@ -63,13 +63,51 @@
                 <label class="form-label">Film type</label>
                 <select name="film_type" class="form-select form-select-sm" required>
                   <option value="">-- Select film type --</option>
-                  <option value="standard" {% if editing_rule and editing_rule[3]=='standard' %}selected{% endif %}>Standard</option>
-                  <option value="regid" {% if editing_rule and editing_rule[3]=='regid' %}selected{% endif %}>REGID</option>
-                  <option value="power" {% if editing_rule and editing_rule[3]=='power' %}selected{% endif %}>Power</option>
-                  <option value="power_plus" {% if editing_rule and editing_rule[3]=='power_plus' %}selected{% endif %}>Power Plus</option>
-                  <option value="uvi_6m" {% if editing_rule and editing_rule[3]=='uvi_6m' %}selected{% endif %}>UVI (6 month)</option>
-                  <option value="uvi_12m" {% if editing_rule and editing_rule[3]=='uvi_12m' %}selected{% endif %}>UVI (12 month)</option>
-                  <option value="prestretch" {% if editing_rule and editing_rule[3]=='prestretch' %}selected{% endif %}>Prestretch</option>
+
+                  <option value="Standard"
+                          {% if editing_rule and editing_rule[3]=='Standard' %}selected{% endif %}>
+                    Standard
+                  </option>
+
+                  <option value="Super_Rigid"
+                          {% if editing_rule and editing_rule[3]=='Super_Rigid' %}selected{% endif %}>
+                    Super RIGID
+                  </option>
+
+                  <option value="Regular_Rigid"
+                          {% if editing_rule and editing_rule[3]=='Regular_Rigid' %}selected{% endif %}>
+                    Regular RIGID
+                  </option>
+
+                  <option value="Power"
+                          {% if editing_rule and editing_rule[3]=='Power' %}selected{% endif %}>
+                    Power
+                  </option>
+
+                  <option value="Power_Plus"
+                          {% if editing_rule and editing_rule[3]=='Power_Plus' %}selected{% endif %}>
+                    Power Plus
+                  </option>
+
+                  <option value="UVI_6m"
+                          {% if editing_rule and editing_rule[3]=='UVI_6m' %}selected{% endif %}>
+                    UVI (6 month)
+                  </option>
+
+                  <option value="UVI_12m"
+                          {% if editing_rule and editing_rule[3]=='UVI_12m' %}selected{% endif %}>
+                    UVI (12 month)
+                  </option>
+
+                  <option value="UV_Rigid"
+                          {% if editing_rule and editing_rule[3]=='UV_Rigid' %}selected{% endif %}>
+                    UV&Rigid
+                  </option>
+
+                  <option value="Prestretch"
+                          {% if editing_rule and editing_rule[3]=='Prestretch' %}selected{% endif %}>
+                    Prestretch
+                  </option>
                 </select>
               </div>
               <div class="mb-2">

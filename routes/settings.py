@@ -495,6 +495,36 @@ def pricing_settings():
                     editing_term = cur.fetchone()
                     if not editing_term:
                         flash("Payment term not found.", "danger")
+                        
+            elif form_action == "add_payment_term":
+                name = (request.form.get("pt_name") or "").strip()
+                credit_days = int(request.form.get("credit_days") or 0)
+                annual_rate_percent = float(
+                    request.form.get("annual_rate_percent") or 0
+                )
+
+                active_tab = "terms"
+
+                if not name:
+                    flash("Payment term name is required.", "danger")
+                elif credit_days < 0:
+                    flash("Credit days cannot be negative.", "danger")
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO payment_terms (
+                            name,
+                            credit_days,
+                            annual_rate_percent,
+                            is_active
+                        )
+                        VALUES (%s, %s, %s, true)
+                        """,
+                        (name, credit_days, annual_rate_percent),
+                    )
+                    flash("Payment term added.", "success")
+
+                    _bump_pricing_cache_version()
 
             elif form_action == "edit_payment_term_save":
                 pt_id = int(request.form.get("pt_id") or 0)
