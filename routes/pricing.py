@@ -74,7 +74,7 @@ def calculate_line_price_bulk(
     packing_cost_per_pallet_map: dict,
     # bulk data maps
     product_info_map: dict,
-    bom_map: dict,
+    product_roll_bom_map: dict,
     energy_rate: float,
     product_machine_map: dict,
     machine_costs_map: dict,
@@ -110,6 +110,7 @@ def calculate_line_price_bulk(
     micron = p_info["micron"]
     film_type = p_info["film_type"]
     is_manual = p_info["is_manual"]
+    bom_scrap_percent = p_info.get("bom_scrap_percent", 0.0)
 
     # kg per roll من الشاشة
     gross_kg_per_roll = max(float(roll_weight_kg or 0), 0.0)
@@ -121,12 +122,36 @@ def calculate_line_price_bulk(
     # ===== 2) Total cost per kg (RM + energy + machine OH) =====
     total_cost_per_kg = 0.0
 
-    # BOM rows
-    bom_rows = bom_map.get(product_id, [])
-    bom_scrap_percent = p_info.get("bom_scrap_percent", 0.0)
+    # --- اختيار roll BOM المناسب حسب وزن الرول ---
+    # الشكل المتوقع:
+    # product_roll_bom_map[product_id] = [
+    #   {
+    #       "weight_from_kg": ...,
+    #       "weight_to_kg": ...,
+    #       "items": [(material_id, pct), ...],
+    #   },
+    #   ...
+    # ]
+    roll_boms_for_product = product_roll_bom_map.get(product_id, [])
+
+    selected_bom_items = []
+    if roll_boms_for_product and gross_kg_per_roll > 0:
+        for rb in roll_boms_for_product:
+            w_from = float(rb.get("weight_from_kg", 0) or 0)
+            w_to = float(rb.get("weight_to_kg", 0) or 0)
+            if (w_from == 0 and w_to == 0) or (
+                gross_kg_per_roll >= w_from and
+                (w_to == 0 or gross_kg_per_roll <= w_to)
+            ):
+                selected_bom_items = rb.get("items", [])
+                break
+
+    # لو ما فيش رول BOM مناسب → نرجّع رسالة خطأ واضحة
+    if not selected_bom_items:
+        return None, "No roll BOM found for this product and roll weight"
 
     # RM cost using material_price_map
-    for material_id, pct in bom_rows:
+    for material_id, pct in selected_bom_items:
         price = material_price_map.get(material_id, 0.0)
         total_cost_per_kg += float(pct or 0) * price
 
@@ -187,10 +212,10 @@ def calculate_line_price_bulk(
 
     total_cost_per_kg += energy_cost_per_kg + machine_oh_per_kg
 
-
     # RM منفصلة (بدون core/packing/extras)
     rm_cost_per_kg = total_cost_per_kg - energy_cost_per_kg - machine_oh_per_kg
     rm_cost_per_kg = round_3(rm_cost_per_kg)  # الأساس يبقى 3 أرقام
+
     # ===== 3) Core + Packing cost =====
     core_cost_per_unit = 0.0
     core_cost_per_kg = 0.0
@@ -382,7 +407,7 @@ def calculate_line_price_bulk(
         cfr_kg_net = cfr_roll / unit_weight_net
     else:
         exw_kg_net = fob_kg_net = cfr_kg_net = 0.0
-            
+
     # ===== 12) cost_base_per_kg لأغراض العرض فقط =====
     cost_base_per_kg = (
         film_cost_per_kg + core_cost_per_kg + packing_cost_per_kg
@@ -477,10 +502,21 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         return {
             "margin_rules_map": defaultdict(list),
             "payment_terms_map": {},
-            "pricing_extras": (0.0, 0.0),
+            "pricing_extras": {
+                "color_extra_usd_per_kg": 0.0,
+                "prestretch_extra_usd_per_kg": 0.0,
+                "foreign_extra_mode": "percent",
+                "foreign_extra_value": 0.0,
+            },
             "packing_cost_per_pallet_map": defaultdict(lambda: {"usd": 0.0, "egp": 0.0}),
             "energy_rate": 0.0,
             "core_price_per_kg_usd": 0.0,
+            "product_machine_map": defaultdict(list),
+            "machine_costs_map": defaultdict(list),
+            "product_info_map": {},
+            "product_roll_bom_map": defaultdict(list),
+            "material_price_map": {},
+            "shipping_rates_map": {},
             "cache_updated_at": None,
             "cache_version": None,
         }
@@ -646,7 +682,7 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         if egp_val and egp_per_usd > 0:
             val["usd"] += egp_val / egp_per_usd
         val["egp"] = 0.0
-        
+
     # --- product_machines + machines (kwh, capacity, utilization) ---
     cur.execute(
         """
@@ -700,6 +736,7 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             machine_costs_map[int(mid)].append(
                 (cost_type, float(amount or 0))
             )
+
     # --- products: basic info map ---
     cur.execute(
         """
@@ -737,17 +774,58 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             "bom_scrap_percent": float(bom_scrap_percent or 0.0),
         }
 
-    # --- BOM: product_bom_map لكل المنتجات ---
+    # --- BOM: product_roll_bom_map لكل المنتجات ---
     cur.execute(
         """
-        SELECT product_id, material_id, percentage
-        FROM product_bom
+        SELECT
+            prb.id,
+            prb.product_id,
+            prb.weight_from_kg,
+            prb.weight_to_kg,
+            prb.is_active
+        FROM product_roll_boms prb
+        WHERE prb.is_active = TRUE
+        ORDER BY prb.product_id, prb.weight_from_kg, prb.weight_to_kg, prb.id
         """
     )
-    rows_bom = cur.fetchall()
-    product_bom_map = defaultdict(list)
-    for pid, mid, pct in rows_bom:
-        product_bom_map[int(pid)].append((int(mid), float(pct or 0.0)))
+    rows_roll_boms = cur.fetchall()
+
+    roll_bom_ids = [int(r[0]) for r in rows_roll_boms] if rows_roll_boms else []
+
+    roll_bom_items_map = defaultdict(list)
+    if roll_bom_ids:
+        cur.execute(
+            """
+            SELECT
+                pri.roll_bom_id,
+                pri.material_id,
+                pri.percentage
+            FROM product_roll_bom_items pri
+            WHERE pri.roll_bom_id = ANY(%s)
+            """,
+            (roll_bom_ids,),
+        )
+        rows_roll_items = cur.fetchall()
+        for roll_bom_id, material_id, pct in rows_roll_items:
+            roll_bom_items_map[int(roll_bom_id)].append(
+                (int(material_id), float(pct or 0.0))
+            )
+
+    product_roll_bom_map = defaultdict(list)
+    for rb_id, product_id, w_from, w_to, is_active in rows_roll_boms:
+        items = roll_bom_items_map.get(int(rb_id), [])
+        product_roll_bom_map[int(product_id)].append(
+            {
+                "weight_from_kg": float(w_from or 0.0),
+                "weight_to_kg": float(w_to or 0.0),
+                "items": items,
+            }
+        )
+
+    for pid in product_roll_bom_map:
+        product_roll_bom_map[pid].sort(
+            key=lambda rb: (rb["weight_from_kg"], rb["weight_to_kg"])
+        )
 
     # --- material_price_map: landed price لكل المواد ---
     cur.execute(
@@ -773,8 +851,8 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         "product_machine_map": product_machine_map,
         "machine_costs_map": machine_costs_map,
         "product_info_map": product_info_map,
-        "product_bom_map": product_bom_map,
-        "material_price_map": material_price_map,  # NEW
+        "product_roll_bom_map": product_roll_bom_map,
+        "material_price_map": material_price_map,
         "shipping_rates_map": {},
         "cache_updated_at": cache_updated_at,
         "cache_version": cache_version_db,
@@ -1693,26 +1771,32 @@ def pricing_screen():
                     )
                 else:
                     with get_db() as cur:
-                        # 3) تحميل الداتا الثابتة من الكاش/الداتابيز مرة واحدة (تشمل المكن + products + BOM + materials)
+                        # 3) تحميل الداتا الثابتة من الكاش/الداتابيز مرة واحدة (تشمل المكن + products + roll BOM + materials)
                         static_data = load_pricing_static_data(cur, egp_per_usd)
                         margin_rules_map = static_data["margin_rules_map"]
                         payment_terms_map = static_data["payment_terms_map"]
                         pricing_extras = static_data["pricing_extras"]
-                        packing_cost_per_pallet_map = static_data["packing_cost_per_pallet_map"]
+                        packing_cost_per_pallet_map = static_data[
+                            "packing_cost_per_pallet_map"
+                        ]
                         energy_rate = static_data["energy_rate"]
                         core_price_per_kg_usd = static_data["core_price_per_kg_usd"]
                         product_machine_map = static_data["product_machine_map"]
                         machine_costs_map = static_data["machine_costs_map"]
                         product_info_map_cached = static_data["product_info_map"]
-                        product_bom_map = static_data["product_bom_map"]
-                        material_price_map = static_data["material_price_map"]  # NEW
+                        product_roll_bom_map = static_data["product_roll_bom_map"]
+                        material_price_map = static_data["material_price_map"]
                         cache_updated_at = static_data["cache_updated_at"]
                         cache_version = static_data["cache_version"]
 
-                        # 1) material_ids لكل المنتجات المطلوبة من الكاش BOM (للتتبع فقط لو حابب)
+                        # 1) material_ids لكل المنتجات المطلوبة من الكاش roll BOM (للتتبع فقط لو حابب)
                         material_ids = set()
                         for pid in product_ids:
-                            for mid, pct in product_bom_map.get(pid, []):
+                            for mid, pct in [
+                                item
+                                for rb in product_roll_bom_map.get(pid, [])
+                                for item in rb.get("items", [])
+                            ]:
                                 material_ids.add(int(mid))
 
                         print(
@@ -1758,190 +1842,193 @@ def pricing_screen():
                             shipping_rates_map[key] = (
                                 fob_per_container,
                                 sea_freight_per_container,
-                            )                                            
+                            )
+
                     # لحد هنا خلصنا DB + بناء الـ maps
                     t_after_db = time.perf_counter()
                     print("[prof] DB + maps took", t_after_db - t0, "seconds")
 
-                    # ========= loop على الـ lines باستخدام الداتا الـ bulk =========
-                    t_logic_start = time.perf_counter()
+        # ========= loop على الـ lines باستخدام الداتا الـ bulk =========
+        t_logic_start = time.perf_counter()
 
-                    for line_number, line in enumerate(lines_input, start=1):
-                        product_id = int(line.get("product_id") or 0)
-                        is_colored = bool(line.get("is_colored"))
-                        price_basis = line.get("price_basis") or "gross"
+        for line_number, line in enumerate(lines_input, start=1):
+            product_id = int(line.get("product_id") or 0)
+            is_colored = bool(line.get("is_colored"))
+            price_basis = line.get("price_basis") or "gross"
 
-                        # 1) خصم السطر
-                        line_discount_pct = float(line.get("discount_percent") or 0.0)
-                        # 2) الخصم الجلوبال من الهيدر
-                        global_discount_pct = float(discount_percent or 0.0)
-                        # 3) المجموع اللي فعلاً بيتطبق في الماكينة
-                        line_discount = line_discount_pct + global_discount_pct
+            # 1) خصم السطر
+            line_discount_pct = float(line.get("discount_percent") or 0.0)
+            # 2) الخصم الجلوبال من الهيدر
+            global_discount_pct = float(discount_percent or 0.0)
+            # 3) المجموع اللي فعلاً بيتطبق في الماكينة
+            line_discount = line_discount_pct + global_discount_pct
 
-                        roll_weight_kg = float(line.get("roll_weight_kg") or 0)
-                        core_weight_kg = float(line.get("core_weight_kg") or 0)
-                        pallets_per_container = float(
-                            line.get("pallets_per_container") or 0
-                        )
-                        rolls_per_pallet = float(
-                            line.get("rolls_per_pallet") or 0
-                        )
-                        pallet_type_id = (
-                            int(line.get("pallet_type_id") or 0) or None
-                        )
-                        packing_type_id = (
-                            int(line.get("packing_type_id") or 0) or None
-                        )
-                        
-                        # هنا تضيف قراءة الـ width من الشاشة
-                        width_mm = float(line.get("width_mm") or 0)
+            roll_weight_kg = float(line.get("roll_weight_kg") or 0)
+            core_weight_kg = float(line.get("core_weight_kg") or 0)
+            pallets_per_container = float(
+                line.get("pallets_per_container") or 0
+            )
+            rolls_per_pallet = float(
+                line.get("rolls_per_pallet") or 0
+            )
+            pallet_type_id = (
+                int(line.get("pallet_type_id") or 0) or None
+            )
+            packing_type_id = (
+                int(line.get("packing_type_id") or 0) or None
+            )
 
-                        # فاليديشن بسيطة: أقل من 100 غالبًا cm
-                        if 0 < width_mm < 100:
-                            suggested = int(width_mm * 10)
-                            msg = (
-                                f"Line {line_number}: Please enter a valid width in mm "
-                                f"(e.g., {suggested} not {int(width_mm)})."
-                            )
-                            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                                return jsonify({"error": msg}), 400
-                            flash(msg, "warning")
-                            continue
+            # هنا تضيف قراءة الـ width من الشاشة
+            width_mm = float(line.get("width_mm") or 0)
 
-                        if not product_id:
-                            continue
+            # فاليديشن بسيطة: أقل من 100 غالبًا cm
+            if 0 < width_mm < 100:
+                suggested = int(width_mm * 10)
+                msg = (
+                    f"Line {line_number}: Please enter a valid width in mm "
+                    f"(e.g., {suggested} not {int(width_mm)})."
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"error": msg}), 400
+                flash(msg, "warning")
+                continue
 
-                        # ===== هنا المنطق الجديد: كل سطر = كونتينر مستقل =====
-                        kg_per_container_line = (
-                            pallets_per_container * rolls_per_pallet * roll_weight_kg
-                        )
+            if not product_id:
+                continue
 
-                        if kg_per_container_line > 0:
-                            fob_cost_per_kg_line = fob_per_container / kg_per_container_line
-                            sea_freight_per_kg_line = (
-                                sea_freight_per_container / kg_per_container_line
-                            )
-                        else:
-                            fob_cost_per_kg_line = 0.0
-                            sea_freight_per_kg_line = 0.0
+            # ===== هنا المنطق الجديد: كل سطر = كونتينر مستقل =====
+            kg_per_container_line = (
+                pallets_per_container * rolls_per_pallet * roll_weight_kg
+            )
 
-                        line_result, err = calculate_line_price_bulk(
-                            product_id=product_id,
-                            is_colored=is_colored,
-                            selected_payment_term_id=selected_payment_term_id,
-                            # نبعَت مجموع line + global
-                            discount_percent=line_discount,
-                            roll_weight_kg=roll_weight_kg,
-                            core_weight_kg=core_weight_kg,
-                            pallets_per_container=pallets_per_container,
-                            rolls_per_pallet=rolls_per_pallet,
-                            pallet_type_id=pallet_type_id,
-                            packing_type_id=packing_type_id,
-                            core_price_per_kg_usd=core_price_per_kg_usd,
-                            packing_cost_per_pallet_map=packing_cost_per_pallet_map,
-                            product_info_map=product_info_map_cached,
-                            bom_map=product_bom_map,
-                            energy_rate=energy_rate,
-                            product_machine_map=product_machine_map,
-                            machine_costs_map=machine_costs_map,
-                            egp_per_usd=egp_per_usd,
-                            margin_rules_map=margin_rules_map,
-                            pricing_extras=pricing_extras,
-                            payment_terms_map=payment_terms_map,
-                            fob_cost_per_kg=fob_cost_per_kg_line,
-                            sea_freight_per_kg=sea_freight_per_kg_line,
-                            material_price_map=material_price_map,
-                            width_mm=width_mm,
-                            is_foreign_pricing=is_foreign_pricing,
-                            price_basis=price_basis,
-                        )
-                        if err:
-                            if (
-                                request.headers.get("X-Requested-With")
-                                == "XMLHttpRequest"
-                            ):
-                                return (
-                                    jsonify(
-                                        {
-                                            "error": f"Line error (product {product_id}): {err}"
-                                        }
-                                    ),
-                                    400,
-                                )
-                            flash(
-                                f"Line error (product {product_id}): {err}",
-                                "danger",
-                            )
-                            continue
-                        # نحسب core/packing per roll مرة واحدة هنا ونحفظها في line_result
-                        core_cost_per_unit_roll = 0.0
-                        core_weight = float(core_weight_kg or 0)
-                        if core_weight > 0 and core_price_per_kg_usd > 0:
-                            core_cost_per_unit_roll = core_price_per_kg_usd * core_weight
+            if kg_per_container_line > 0:
+                fob_cost_per_kg_line = fob_per_container / kg_per_container_line
+                sea_freight_per_kg_line = (
+                    sea_freight_per_container / kg_per_container_line
+                )
+            else:
+                fob_cost_per_kg_line = 0.0
+                sea_freight_per_kg_line = 0.0
 
-                        packing_cost_per_unit_roll = 0.0
-                        try:
-                            rolls_per_pallet_val = float(rolls_per_pallet or 0)
-                            pallet_key = (packing_type_id, pallet_type_id)
-                            pack_info = packing_cost_per_pallet_map.get(pallet_key)
-                            if pack_info and rolls_per_pallet_val > 0:
-                                total_packing_usd_per_pallet = pack_info["usd"]
-                                packing_cost_per_unit_roll = (
-                                    total_packing_usd_per_pallet / rolls_per_pallet_val
-                                )
-                        except Exception:
-                            packing_cost_per_unit_roll = 0.0
-
-                        packing_core_cost_unit_roll = (
-                            core_cost_per_unit_roll + packing_cost_per_unit_roll
-                        )
-
-                        # نخزّنهم جوه line_result عشان الـ snapshot يستخدمهم
-                        line_result["core_cost_unit_roll"] = core_cost_per_unit_roll
-                        line_result["packing_cost_unit_roll"] = packing_cost_per_unit_roll
-                        line_result["packing_core_cost_unit_roll"] = packing_core_cost_unit_roll
-
-                        disc = line_result["discounted"]
-                        if price_basis == "gross":
-                            exw_display = disc["exw_kg_gross"]
-                            fob_display = disc["fob_kg_gross"]
-                            cfr_display = disc["cfr_kg_gross"]
-                        elif price_basis == "net":
-                            exw_display = disc["exw_kg_net"]
-                            fob_display = disc["fob_kg_net"]
-                            cfr_display = disc["cfr_kg_net"]
-                        else:  # roll
-                            exw_display = disc["exw_roll"]
-                            fob_display = disc["fob_roll"]
-                            cfr_display = disc["cfr_roll"]
-
-                        lines_results.append(
+            line_result, err = calculate_line_price_bulk(
+                product_id=product_id,
+                is_colored=is_colored,
+                selected_payment_term_id=selected_payment_term_id,
+                # نبعَت مجموع line + global
+                discount_percent=line_discount,
+                roll_weight_kg=roll_weight_kg,
+                core_weight_kg=core_weight_kg,
+                pallets_per_container=pallets_per_container,
+                rolls_per_pallet=rolls_per_pallet,
+                pallet_type_id=pallet_type_id,
+                packing_type_id=packing_type_id,
+                core_price_per_kg_usd=core_price_per_kg_usd,
+                packing_cost_per_pallet_map=packing_cost_per_pallet_map,
+                # bulk data maps
+                product_info_map=product_info_map_cached,
+                product_roll_bom_map=product_roll_bom_map,
+                energy_rate=energy_rate,
+                product_machine_map=product_machine_map,
+                machine_costs_map=machine_costs_map,
+                egp_per_usd=egp_per_usd,
+                margin_rules_map=margin_rules_map,
+                pricing_extras=pricing_extras,
+                payment_terms_map=payment_terms_map,
+                fob_cost_per_kg=fob_cost_per_kg_line,
+                sea_freight_per_kg=sea_freight_per_kg_line,
+                material_price_map=material_price_map,
+                width_mm=width_mm,
+                is_foreign_pricing=is_foreign_pricing,
+                price_basis=price_basis,
+            )
+            if err:
+                if (
+                    request.headers.get("X-Requested-With")
+                    == "XMLHttpRequest"
+                ):
+                    return (
+                        jsonify(
                             {
-                                "calc": line_result,  # نحفظ كل نتيجة الكالكيوليشن
-                                "discounted": {
-                                    "exw_display": exw_display,
-                                    "fob_display": fob_display,
-                                    "cfr_display": cfr_display,
-                                },
+                                "error": f"Line error (product {product_id}): {err}"
                             }
-                        )
-
-                    t_logic_end = time.perf_counter()
-                    print(
-                        f"[pricing-inner] Python logic (lines loop) took {t_logic_end - t_logic_start:.3f}s"
+                        ),
+                        400,
                     )
+                flash(
+                    f"Line error (product {product_id}): {err}",
+                    "danger",
+                )
+                continue
 
-                    t1 = time.perf_counter()
-                    print(
-                        f"[pricing] Calculated {len(lines_input)} line(s) in {t1 - t0:.3f}s"
-                    )
+            # نحسب core/packing per roll مرة واحدة هنا ونحفظها في line_result
+            core_cost_per_unit_roll = 0.0
+            core_weight = float(core_weight_kg or 0)
+            if core_weight > 0 and core_price_per_kg_usd > 0:
+                core_cost_per_unit_roll = core_price_per_kg_usd * core_weight
 
-                    # تقسيم واضح: DB+maps vs loop
-                    print(
-                        "[prof] DB+maps =", t_after_db - t0,
-                        " | loop+calc =", t_logic_end - t_logic_start,
-                        " | total =", t1 - t0,
+            packing_cost_per_unit_roll = 0.0
+            try:
+                rolls_per_pallet_val = float(rolls_per_pallet or 0)
+                pallet_key = (packing_type_id, pallet_type_id)
+                pack_info = packing_cost_per_pallet_map.get(pallet_key)
+                if pack_info and rolls_per_pallet_val > 0:
+                    total_packing_usd_per_pallet = pack_info["usd"]
+                    packing_cost_per_unit_roll = (
+                        total_packing_usd_per_pallet / rolls_per_pallet_val
                     )
+            except Exception:
+                packing_cost_per_unit_roll = 0.0
+
+            packing_core_cost_unit_roll = (
+                core_cost_per_unit_roll + packing_cost_per_unit_roll
+            )
+
+            # نخزّنهم جوه line_result عشان الـ snapshot يستخدمهم
+            line_result["core_cost_unit_roll"] = core_cost_per_unit_roll
+            line_result["packing_cost_unit_roll"] = packing_cost_per_unit_roll
+            line_result["packing_core_cost_unit_roll"] = packing_core_cost_unit_roll
+
+            disc = line_result["discounted"]
+            if price_basis == "gross":
+                exw_display = disc["exw_kg_gross"]
+                fob_display = disc["fob_kg_gross"]
+                cfr_display = disc["cfr_kg_gross"]
+            elif price_basis == "net":
+                exw_display = disc["exw_kg_net"]
+                fob_display = disc["fob_kg_net"]
+                cfr_display = disc["cfr_kg_net"]
+            else:  # roll
+                exw_display = disc["exw_roll"]
+                fob_display = disc["fob_roll"]
+                cfr_display = disc["cfr_roll"]
+
+            lines_results.append(
+                {
+                    "calc": line_result,  # نحفظ كل نتيجة الكالكيوليشن
+                    "discounted": {
+                        "exw_display": exw_display,
+                        "fob_display": fob_display,
+                        "cfr_display": cfr_display,
+                    },
+                }
+            )
+
+        t_logic_end = time.perf_counter()
+        print(
+            f"[pricing-inner] Python logic (lines loop) took {t_logic_end - t_logic_start:.3f}s"
+        )
+
+        t1 = time.perf_counter()
+        print(
+            f"[pricing] Calculated {len(lines_input)} line(s) in {t1 - t0:.3f}s"
+        )
+
+        # تقسيم واضح: DB+maps vs loop
+        print(
+            "[prof] DB+maps =", t_after_db - t0,
+            " | loop+calc =", t_logic_end - t_logic_start,
+            " | total =", t1 - t0,
+        )
 
         # ===== هنا نفصل بين AJAX وبين POST العادي =====
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -2025,7 +2112,6 @@ def pricing_screen():
         cache_version=cache_version,
         pricing_header=pricing_header,
     )
-
 
 
 @pricing_bp.route("/quotations", methods=["GET"])

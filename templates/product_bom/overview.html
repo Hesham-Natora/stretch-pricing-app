@@ -54,10 +54,11 @@
             </td>
             <td class="text-end">{{ "%.4f"|format(total_cost) }}</td>
             <td class="text-center">
-              <a href="{{ url_for('product_bom.edit_bom', product_id=p[0]) }}"
-                 class="btn btn-sm btn-outline-primary">
+              <a href="{{ url_for('product_settings.index', product_id=p[0]) }}?show_bom_only=1"
+                class="btn btn-sm btn-outline-primary">
                 Edit BOM
               </a>
+            </td>
             </td>
           </tr>
         {% else %}

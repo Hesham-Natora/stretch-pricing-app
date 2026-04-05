@@ -24,6 +24,7 @@
 </div>
 
 <ul class="nav nav-tabs mb-3" id="productSettingsTabs" role="tablist">
+  {% if not show_bom_only %}
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="machines-tab"
             data-bs-toggle="tab" data-bs-target="#machines-pane"
@@ -31,16 +32,18 @@
       Machines
     </button>
   </li>
+  {% endif %}
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="bom-tab"
+    <button class="nav-link {% if show_bom_only %}active{% endif %}" id="bom-tab"
             data-bs-toggle="tab" data-bs-target="#bom-pane"
-            type="button" role="tab" aria-controls="bom-pane" aria-selected="false">
+            type="button" role="tab" aria-controls="bom-pane" aria-selected="{{ 'true' if show_bom_only else 'false' }}">
       BOM
     </button>
   </li>
 </ul>
 
 <div class="tab-content" id="productSettingsTabsContent">
+  {% if not show_bom_only %}
   <!-- Machines tab -->
   <div class="tab-pane fade show active" id="machines-pane"
        role="tabpanel" aria-labelledby="machines-tab">
@@ -142,19 +145,56 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- BOM tab -->
-  <div class="tab-pane fade" id="bom-pane"
+  <div class="tab-pane fade {% if show_bom_only %}show active{% endif %}" id="bom-pane"
        role="tabpanel" aria-labelledby="bom-tab">
     <div class="row g-3">
-      <!-- Left: Add / Update BOM item -->
+      <!-- Left: Roll BOM selection + Add / Update BOM item -->
       <div class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+          <div class="card-header py-2">
+            <strong>Roll BOM (by roll weight)</strong>
+          </div>
+          <div class="card-body small">
+            <div class="mb-3">
+              <label for="roll_bom_select" class="form-label">Select roll BOM</label>
+              <div class="d-flex gap-2">
+                <select id="roll_bom_select" class="form-select form-select-sm">
+                  {% if roll_boms %}
+                    {% for rb in roll_boms %}
+                      {% set rb_id = rb[0] %}
+                      {% set rb_label = rb[1] or '' %}
+                      {% set w_from = rb[2] %}
+                      {% set w_to = rb[3] %}
+                      <option value="{{ rb_id }}"
+                              {% if selected_roll_bom and selected_roll_bom[0] == rb_id %}selected{% endif %}>
+                        {{ rb_label or ('Range ' ~ w_from ~ '–' ~ w_to ~ ' kg') }}
+                        ({{ w_from }} – {{ w_to }} kg)
+                      </option>
+                    {% endfor %}
+                  {% else %}
+                    <option value="">No roll BOM defined yet</option>
+                  {% endif %}
+                </select>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn_add_roll_bom">
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="card shadow-sm h-100">
           <div class="card-header py-2">
             <strong>Add / Update BOM item</strong>
           </div>
           <div class="card-body">
             <form id="ps-bom-form" class="small" data-no-spinner="1">
+              <input type="hidden" name="roll_bom_id" id="roll_bom_id"
+                     value="{% if selected_roll_bom %}{{ selected_roll_bom[0] }}{% endif %}">
+
               <div class="mb-3">
                 <label class="form-label">Material</label>
                 <select name="material_id" id="ps-bom-material" class="form-select form-select-sm" required>
@@ -283,6 +323,35 @@
   </div> <!-- /bom-pane -->
 </div> <!-- /tab-content -->
 
+<div id="rollBomModal" class="modal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="form_add_roll_bom" class="modal-content" data-no-spinner="1">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Roll BOM</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body small">
+        <div class="mb-3">
+          <label class="form-label">Label (optional)</label>
+          <input type="text" class="form-control form-control-sm" name="label">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Weight from (kg)</label>
+          <input type="number" step="0.001" class="form-control form-control-sm" name="weight_from_kg" value="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Weight to (kg)</label>
+          <input type="number" step="0.001" class="form-control form-control-sm" name="weight_to_kg" value="0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   // ----- Machines tab AJAX -----
@@ -332,76 +401,78 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  machinesForm.addEventListener('submit', function (e) {
-    e.preventDefault();
+  if (machinesForm) {
+    machinesForm.addEventListener('submit', function (e) {
+      e.preventDefault();
 
-    const formData = new FormData(machinesForm);
+      const formData = new FormData(machinesForm);
 
-    if (machinesSaveBtn) {
-      machinesSaveBtn.disabled = true;
-      machinesSaveBtn.innerHTML =
-        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
-    }
-
-    fetch("{{ url_for('product_settings.machines_save', product_id=product[0]) }}", {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
-    .then(data => {
-      renderMappingsTable(data);
-      machinesForm.reset();
-      document.getElementById('ps-machine-id').focus();
-    })
-    .catch(err => {
-      alert(err.error || 'Saving mapping failed');
-    })
-    .finally(() => {
       if (machinesSaveBtn) {
-        machinesSaveBtn.disabled = false;
-        machinesSaveBtn.innerHTML = 'Save mapping';
+        machinesSaveBtn.disabled = true;
+        machinesSaveBtn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
       }
-    });
-  });
 
-  mappingsTbody.addEventListener('click', function (e) {
-    const btn = e.target.closest('.ps-delete-mapping-btn');
-    if (!btn) return;
-
-    const mappingId = btn.dataset.mappingId;
-    if (!mappingId) return;
-
-    const ok = confirm('Delete this mapping?');
-    if (!ok) return;
-
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML =
-      '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-
-    fetch(
-      "{{ url_for('product_settings.machines_delete', product_id=product[0], mapping_id=0) }}"
-        .replace('0', mappingId),
-      {
+      fetch("{{ url_for('product_settings.machines_save', product_id=product[0]) }}", {
         method: 'POST',
+        body: formData,
         headers: {
           'X-Requested-With': 'XMLHttpRequest'
         }
-      }
-    )
-    .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
-    .then(data => {
-      renderMappingsTable(data);
-    })
-    .catch(err => {
-      alert(err.error || 'Deleting mapping failed');
-      btn.disabled = false;
-      btn.innerHTML = originalHtml;
+      })
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        renderMappingsTable(data);
+        machinesForm.reset();
+        document.getElementById('ps-machine-id').focus();
+      })
+      .catch(err => {
+        alert(err.error || 'Saving mapping failed');
+      })
+      .finally(() => {
+        if (machinesSaveBtn) {
+          machinesSaveBtn.disabled = false;
+          machinesSaveBtn.innerHTML = 'Save mapping';
+        }
+      });
     });
-  });
+
+    mappingsTbody.addEventListener('click', function (e) {
+      const btn = e.target.closest('.ps-delete-mapping-btn');
+      if (!btn) return;
+
+      const mappingId = btn.dataset.mappingId;
+      if (!mappingId) return;
+
+      const ok = confirm('Delete this mapping?');
+      if (!ok) return;
+
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML =
+        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+      fetch(
+        "{{ url_for('product_settings.machines_delete', product_id=product[0], mapping_id=0) }}"
+          .replace('0', mappingId),
+        {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        }
+      )
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        renderMappingsTable(data);
+      })
+      .catch(err => {
+        alert(err.error || 'Deleting mapping failed');
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      });
+    });
+  }
 
   // ----- BOM tab AJAX -----
   const bomForm = document.getElementById('ps-bom-form');
@@ -412,6 +483,113 @@ document.addEventListener('DOMContentLoaded', function () {
   const bomTotalPctCell = document.getElementById('ps-bom-total-pct');
   const bomTotalCostCell = document.getElementById('ps-bom-total-cost');
   const rawCostSpan = document.getElementById('raw-cost-span');
+
+  var rollBomSelect = document.getElementById('roll_bom_select');
+  var rollBomIdInput = document.getElementById('roll_bom_id');
+  var btnAddRollBom = document.getElementById('btn_add_roll_bom');
+  var rollBomModalEl = document.getElementById('rollBomModal');
+  var rollBomModal = rollBomModalEl ? new bootstrap.Modal(rollBomModalEl) : null;
+
+  if (rollBomSelect && rollBomIdInput) {
+    rollBomSelect.addEventListener('change', function () {
+      rollBomIdInput.value = this.value || '';
+
+      const selectedId = this.value;
+      if (!selectedId) {
+        return;
+      }
+
+      const url = "{{ url_for('product_settings.roll_bom_details', product_id=product[0], roll_bom_id=0) }}"
+        .replace('0', selectedId);
+
+      fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        renderBomTable(data);
+      })
+      .catch(err => {
+        console.error(err);
+        alert(err.error || 'Failed to load BOM for selected roll');
+      });
+    });
+  }
+
+  if (btnAddRollBom && rollBomModal) {
+    btnAddRollBom.addEventListener('click', function () {
+      rollBomModal.show();
+    });
+  }
+
+  var formAddRollBom = document.getElementById('form_add_roll_bom');
+  if (formAddRollBom) {
+    formAddRollBom.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var submitBtn = formAddRollBom.querySelector('button[type="submit"]');
+      var originalHtml = submitBtn ? submitBtn.innerHTML : null;
+
+      var formData = new FormData(formAddRollBom);
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...';
+      }
+
+      fetch("{{ url_for('product_settings.roll_bom_create', product_id=product[0]) }}", {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+      })
+      .then(resp => resp.ok ? resp.json() : resp.json().then(err => { throw err; }))
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+
+        if (rollBomSelect && Array.isArray(data.roll_boms)) {
+          rollBomSelect.innerHTML = '';
+          data.roll_boms.forEach(function (rb) {
+            var opt = document.createElement('option');
+            opt.value = rb.id;
+            var label = rb.label || ('Range ' + rb.weight_from_kg + '–' + rb.weight_to_kg + ' kg');
+            opt.textContent = label + ' (' + rb.weight_from_kg + ' – ' + rb.weight_to_kg + ' kg)';
+            if (rb.id === data.selected_roll_bom_id) {
+              opt.selected = true;
+            }
+            rollBomSelect.appendChild(opt);
+          });
+          if (rollBomIdInput && data.selected_roll_bom_id) {
+            rollBomIdInput.value = data.selected_roll_bom_id;
+          }
+        }
+
+        if (rollBomModal) {
+          rollBomModal.hide();
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert(err.error || 'Error creating roll BOM');
+      })
+      .finally(() => {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalHtml;
+        }
+      });
+    });
+  }
 
   function renderBomTable(data) {
     const items = data.items || [];

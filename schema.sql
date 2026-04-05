@@ -337,3 +337,26 @@ CREATE TABLE IF NOT EXISTS pricing_cache_control (
     cache_version INTEGER NOT NULL DEFAULT 1,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- NEW: BOMs per product per roll weight
+
+CREATE TABLE IF NOT EXISTS product_roll_boms (
+    id              SERIAL PRIMARY KEY,
+    product_id      INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    label           VARCHAR(100),
+    weight_from_kg  NUMERIC(10,4) NOT NULL,
+    weight_to_kg    NUMERIC(10,4) NOT NULL,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (product_id, weight_from_kg, weight_to_kg)
+);
+
+CREATE TABLE IF NOT EXISTS product_roll_bom_items (
+    id            SERIAL PRIMARY KEY,
+    roll_bom_id   INTEGER NOT NULL REFERENCES product_roll_boms(id) ON DELETE CASCADE,
+    material_id   INTEGER NOT NULL REFERENCES materials(id),
+    percentage    NUMERIC(5,4) NOT NULL,
+    scrap_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (roll_bom_id, material_id)
+);
