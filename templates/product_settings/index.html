@@ -489,20 +489,19 @@ document.addEventListener('DOMContentLoaded', function () {
   var btnAddRollBom = document.getElementById('btn_add_roll_bom');
   var rollBomModalEl = document.getElementById('rollBomModal');
   var rollBomModal = rollBomModalEl ? new bootstrap.Modal(rollBomModalEl) : null;
+  
 
-  // خُد الـ product_id من الـ div
-  var rootEl = document.getElementById('product-settings-root');
-  var productId = rootEl ? rootEl.dataset.productId : null;
-
-  if (rollBomSelect && rollBomIdInput && productId) {
+  if (rollBomSelect && rollBomIdInput) {
     rollBomSelect.addEventListener('change', function () {
-      const selectedId = this.value;
-      rollBomIdInput.value = selectedId || '';
-      if (!selectedId) return;
+      rollBomIdInput.value = this.value || '';
 
-      const url =
-        `/product-settings/product/${productId}/settings/roll-bom/${selectedId}/details`;
-      console.log('DEBUG enforced url =', url);
+      const selectedId = this.value;
+      if (!selectedId) {
+        return;
+      }
+
+      const url = "{{ url_for('product_settings.roll_bom_details', product_id=product[0], roll_bom_id=0) }}"
+        .replace('0', selectedId);
 
       fetch(url, {
         method: 'GET',
