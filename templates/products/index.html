@@ -26,13 +26,19 @@
         <tr>
           <td>{{ p[1] }}</td>
           <td>
-            {% if p[6] == 'standard' %}Standard
-            {% elif p[6] == 'regid' %}REGID
-            {% elif p[6] == 'power' %}Power
-            {% elif p[6] == 'power_plus' %}Power Plus
-            {% elif p[6] == 'uvi_6m' %}UVI (6 month)
-            {% elif p[6] == 'uvi_12m' %}UVI (12 month)
-            {% elif p[6] == 'prestretch' %}Prestretch
+            {% if p[6] == 'Standard' %}Standard
+            {% elif p[6] == 'Super_Rigid' %}Super RIGID
+            {% elif p[6] == 'Regular_Rigid' %}Regular RIGID
+            {% elif p[6] == 'Power' %}Power
+            {% elif p[6] == 'Power_Plus' %}Power Plus
+            {% elif p[6] == 'UVI_6m_Standard' %}UVI (6 month) Standard
+            {% elif p[6] == 'UVI_6m_Power' %}UVI (6 month) Power
+            {% elif p[6] == 'UVI_6m_Power_Plus' %}UVI (6 month) Power Plus
+            {% elif p[6] == 'UVI_12m_Standard' %}UVI (12 month) Standard
+            {% elif p[6] == 'UVI_12m_Power' %}UVI (12 month) Power
+            {% elif p[6] == 'UVI_12m_Power_Plus' %}UVI (12 month) Power Plus
+            {% elif p[6] == 'UV_Rigid' %}UV&Rigid
+            {% elif p[6] == 'Prestretch' %}Prestretch
             {% else %}{{ p[6] }}
             {% endif %}
           </td>
