@@ -494,7 +494,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var rollBomModalEl = document.getElementById('rollBomModal');
   var rollBomModal = rollBomModalEl ? new bootstrap.Modal(rollBomModalEl) : null;
   
-
   if (rollBomSelect && rollBomIdInput) {
     rollBomSelect.addEventListener('change', function () {
       rollBomIdInput.value = this.value || '';
@@ -744,3 +743,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
+
