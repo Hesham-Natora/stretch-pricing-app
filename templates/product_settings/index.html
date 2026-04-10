@@ -503,8 +503,9 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      const url = "{{ url_for('product_settings.roll_bom_details', product_id=product[0], roll_bom_id='__ROLL__') }}"
-        .replace('__ROLL__', selectedId);
+      // base URL: /product-settings/product/<id>/settings
+      const baseUrl = "{{ url_for('product_settings.index', product_id=product[0]) }}";
+      const url = baseUrl + "/roll-bom/" + encodeURIComponent(selectedId) + "/details";
 
       fetch(url, {
         method: 'GET',
