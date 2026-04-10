@@ -503,8 +503,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      const url = "{{ url_for('product_settings.roll_bom_details', product_id=product[0], roll_bom_id=0) }}"
-        .replace('0', selectedId);
+      const url = "{{ url_for('product_settings.roll_bom_details', product_id=product[0], roll_bom_id='__ROLL__') }}"
+        .replace('__ROLL__', selectedId);
 
       fetch(url, {
         method: 'GET',
