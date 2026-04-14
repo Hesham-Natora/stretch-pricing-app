@@ -184,33 +184,36 @@ def get_energy_rate_usd_per_kwh() -> float:
     return usd_per_kwh
 
 
-def get_pricing_rule_for_product(product_id: int) -> float:
+def get_pricing_rule_for_product(
+    product_id: int,
+    packing_type_id: int,
+    roll_weight_kg: float,
+) -> float:
     """
     يرجّع margin_percent المناسب للمنتج من جدول pricing_rules
-    بناءً على micron + film_type + is_manual + roll_weight.
+    بناءً على:
+      - micron, film_type من products
+      - packing_type_id من quotation_items
+      - roll_weight_kg من quotation_items
     """
     with get_db() as cur:
         # بيانات المنتج
         cur.execute(
             """
             SELECT micron,
-                   film_type,
-                   is_manual,
-                   kg_per_roll
+                   film_type
             FROM products
             WHERE id = %s
             """,
             (product_id,),
         )
         row = cur.fetchone()
-
         if not row:
             return 0.0
 
         micron = int(row[0] or 0)
         film_type = (row[1] or "standard").strip()
-        is_manual = bool(row[2])
-        kg_per_roll = float(row[3] or 0) or 1.0
+        rw = float(roll_weight_kg or 0) or 1.0
 
         # margin factor من pricing_rules
         cur.execute(
@@ -219,7 +222,7 @@ def get_pricing_rule_for_product(product_id: int) -> float:
             FROM pricing_rules
             WHERE micron_min <= %s AND micron_max >= %s
               AND film_type = %s
-              AND is_manual = %s
+              AND packing_type_id = %s
               AND (
                     (roll_weight_min = 0 AND roll_weight_max = 0)
                  OR (%s >= roll_weight_min AND %s <= roll_weight_max)
@@ -227,7 +230,7 @@ def get_pricing_rule_for_product(product_id: int) -> float:
             ORDER BY roll_weight_min, roll_weight_max
             LIMIT 1
             """,
-            (micron, micron, film_type, is_manual, kg_per_roll, kg_per_roll),
+            (micron, micron, film_type, packing_type_id, rw, rw),
         )
         rule = cur.fetchone()
         if not rule:
@@ -256,7 +259,12 @@ def get_pricing_extras() -> tuple[float, float]:
         return float(row[0] or 0), float(row[1] or 0)
 
 
-def calculate_base_price_per_kg(product_id: int, total_cost_per_kg: float) -> float:
+def calculate_base_price_per_kg(
+    product_id: int,
+    packing_type_id: int,
+    roll_weight_kg: float,
+    total_cost_per_kg: float,
+) -> float:
     """
     total_cost_per_kg: كل التكاليف قبل الربحية (خامات + كهرباء + ثابت + باكينج + ...)
 
@@ -266,7 +274,7 @@ def calculate_base_price_per_kg(product_id: int, total_cost_per_kg: float) -> fl
     if total_cost_per_kg <= 0:
         return 0.0
 
-    margin = get_pricing_rule_for_product(product_id)
+    margin = get_pricing_rule_for_product(product_id, packing_type_id, roll_weight_kg)
     margin_factor = 1 + (margin / 100.0)
     base_price = total_cost_per_kg * margin_factor
 
@@ -300,15 +308,21 @@ def calculate_export_prices(
     destination_id: int,
     payment_term: str,
     total_cost_per_kg: float,
+    packing_type_id: int,
+    roll_weight_kg: float,
 ) -> dict:
     """
     يحسب:
     - FOB/CFR per kg
     - FOB/CFR per roll
     - نسخ cash/credit بسيطة بناءً على payment_term
-    (لسه الجزء الخاص بالـ payment_terms جديد ممكن يتطوّر بعدين).
     """
-    base_price_per_kg = calculate_base_price_per_kg(product_id, total_cost_per_kg)
+    base_price_per_kg = calculate_base_price_per_kg(
+        product_id,
+        packing_type_id,
+        roll_weight_kg,
+        total_cost_per_kg,
+    )
 
     with get_db() as cur:
         # kg per roll

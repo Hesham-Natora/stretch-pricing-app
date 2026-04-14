@@ -299,7 +299,7 @@ def pricing_settings():
                 micron_min = int(request.form.get("micron_min") or 0)
                 micron_max = int(request.form.get("micron_max") or 0)
                 film_type = (request.form.get("film_type") or "").strip()
-                is_manual = request.form.get("is_manual") == "1"
+                packing_type_id = int(request.form.get("packing_type_id") or 0)
                 roll_weight_min = float(request.form.get("roll_weight_min") or 0)
                 roll_weight_max = float(request.form.get("roll_weight_max") or 0)
                 margin_percent = float(request.form.get("margin_percent") or 0)
@@ -310,6 +310,8 @@ def pricing_settings():
                     flash("Micron range is invalid.", "danger")
                 elif not film_type:
                     flash("Film type is required.", "danger")
+                elif packing_type_id <= 0:
+                    flash("Packing type is required.", "danger")
                 elif roll_weight_max and roll_weight_max < roll_weight_min:
                     flash("Roll weight range is invalid.", "danger")
                 else:
@@ -319,7 +321,7 @@ def pricing_settings():
                             micron_min,
                             micron_max,
                             film_type,
-                            is_manual,
+                            packing_type_id,
                             roll_weight_min,
                             roll_weight_max,
                             margin_percent
@@ -330,7 +332,7 @@ def pricing_settings():
                             micron_min,
                             micron_max,
                             film_type,
-                            is_manual,
+                            packing_type_id,
                             roll_weight_min,
                             roll_weight_max,
                             margin_percent,
@@ -350,7 +352,7 @@ def pricing_settings():
                                micron_min,
                                micron_max,
                                film_type,
-                               is_manual,
+                               packing_type_id,
                                roll_weight_min,
                                roll_weight_max,
                                margin_percent
@@ -368,7 +370,7 @@ def pricing_settings():
                 micron_min = int(request.form.get("micron_min") or 0)
                 micron_max = int(request.form.get("micron_max") or 0)
                 film_type = (request.form.get("film_type") or "").strip()
-                is_manual = request.form.get("is_manual") == "1"
+                packing_type_id = int(request.form.get("packing_type_id") or 0)
                 roll_weight_min = float(request.form.get("roll_weight_min") or 0)
                 roll_weight_max = float(request.form.get("roll_weight_max") or 0)
                 margin_percent = float(request.form.get("margin_percent") or 0)
@@ -381,6 +383,8 @@ def pricing_settings():
                     flash("Micron range is invalid.", "danger")
                 elif not film_type:
                     flash("Film type is required.", "danger")
+                elif packing_type_id <= 0:
+                    flash("Packing type is required.", "danger")
                 elif roll_weight_max and roll_weight_max < roll_weight_min:
                     flash("Roll weight range is invalid.", "danger")
                 else:
@@ -390,7 +394,7 @@ def pricing_settings():
                         SET micron_min = %s,
                             micron_max = %s,
                             film_type = %s,
-                            is_manual = %s,
+                            packing_type_id = %s,
                             roll_weight_min = %s,
                             roll_weight_max = %s,
                             margin_percent = %s
@@ -400,7 +404,7 @@ def pricing_settings():
                             micron_min,
                             micron_max,
                             film_type,
-                            is_manual,
+                            packing_type_id,
                             roll_weight_min,
                             roll_weight_max,
                             margin_percent,
@@ -574,12 +578,12 @@ def pricing_settings():
                        micron_min,
                        micron_max,
                        film_type,
-                       is_manual,
+                       packing_type_id,
                        roll_weight_min,
                        roll_weight_max,
                        margin_percent
                 FROM pricing_rules
-                ORDER BY film_type, is_manual DESC, micron_min, roll_weight_min
+                ORDER BY film_type, packing_type_id, micron_min, roll_weight_min
                 """
             )
             pricing_rules = cur.fetchall()
@@ -611,6 +615,15 @@ def pricing_settings():
             )
             payment_terms = cur.fetchall()
 
+            cur.execute(
+                """
+                SELECT id, name
+                FROM packing_types
+                ORDER BY id
+                """
+            )
+            packing_types = cur.fetchall()
+
         extras = extras_rows[0] if extras_rows else None
 
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -622,6 +635,7 @@ def pricing_settings():
                 editing_rule=editing_rule,
                 editing_term=editing_term,
                 active_tab=active_tab,
+                packing_types=packing_types,
             )
 
         # الطلب العادي القديم (لو حد فتح بدون AJAX)
@@ -635,12 +649,12 @@ def pricing_settings():
                 micron_min,
                 micron_max,
                 film_type,
-                is_manual,
+                packing_type_id,
                 roll_weight_min,
                 roll_weight_max,
                 margin_percent
             FROM pricing_rules
-            ORDER BY film_type, is_manual DESC, micron_min, roll_weight_min
+            ORDER BY film_type, packing_type_id, micron_min, roll_weight_min
             """
         )
         pricing_rules = cur.fetchall()
@@ -672,6 +686,15 @@ def pricing_settings():
         )
         payment_terms = cur.fetchall()
 
+        cur.execute(
+            """
+            SELECT id, name
+            FROM packing_types
+            ORDER BY id
+            """
+        )
+        packing_types = cur.fetchall()
+
     extras = extras_rows[0] if extras_rows else None
 
     return render_template(
@@ -682,6 +705,7 @@ def pricing_settings():
         editing_rule=editing_rule,
         editing_term=editing_term,
         active_tab=request.args.get("tab") or "rules",
+        packing_types=packing_types,
     )
 
 

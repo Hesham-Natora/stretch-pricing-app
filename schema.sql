@@ -298,15 +298,15 @@ CREATE TABLE IF NOT EXISTS import_cost_profiles (
 
 -- جدول pricing_rules
 CREATE TABLE IF NOT EXISTS pricing_rules (
-    id                 SERIAL PRIMARY KEY,
-    micron_min         INTEGER NOT NULL,
-    micron_max         INTEGER NOT NULL,
-    film_type          VARCHAR(20) NOT NULL,  -- standard / regid / uvi_6m / uvi_12m / prestretch
-    is_manual          BOOLEAN NOT NULL,      -- True = manual, False = automatic
-    roll_weight_min    NUMERIC(10,4) DEFAULT 0,
-    roll_weight_max    NUMERIC(10,4) DEFAULT 0,
-    margin_percent     NUMERIC(6,2) NOT NULL,
-    UNIQUE (micron_min, micron_max, film_type, is_manual, roll_weight_min, roll_weight_max)
+    id               SERIAL PRIMARY KEY,
+    micron_min       INTEGER NOT NULL,
+    micron_max       INTEGER NOT NULL,
+    film_type        VARCHAR(20) NOT NULL,  -- standard / regid / uvi_6m / uvi_12m / prestretch
+    packing_type_id  INTEGER NOT NULL REFERENCES packing_types(id),
+    roll_weight_min  NUMERIC(10,4) DEFAULT 0,
+    roll_weight_max  NUMERIC(10,4) DEFAULT 0,
+    margin_percent   NUMERIC(6,2) NOT NULL,
+    UNIQUE (micron_min, micron_max, film_type, packing_type_id, roll_weight_min, roll_weight_max)
 );
 
 CREATE TABLE IF NOT EXISTS quotation_item_cost_snapshots (

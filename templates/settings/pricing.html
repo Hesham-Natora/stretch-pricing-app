@@ -3,420 +3,440 @@
 
 {% block content %}
 <div id="pricing-page-wrapper">
-<h2 class="mb-3">Pricing Settings</h2>
+  <h2 class="mb-3">Pricing Settings</h2>
 
-{% set current_tab = active_tab or 'rules' %}
+  {% set current_tab = active_tab or 'rules' %}
 
-<ul class="nav nav-tabs mb-3 small">
-  <li class="nav-item">
-    <button class="nav-link {% if current_tab == 'rules' %}active{% endif %}"
-            data-bs-toggle="tab" data-bs-target="#tab-rules" type="button">
-      Margin factors
-    </button>
-  </li>
-  <li class="nav-item">
-    <button class="nav-link {% if current_tab == 'extras' %}active{% endif %}"
-            data-bs-toggle="tab" data-bs-target="#tab-extras" type="button">
-      Extras
-    </button>
-  </li>
-  {% if current_user.role in ['admin','owner'] %}
-  <li class="nav-item">
-    <button class="nav-link {% if current_tab == 'terms' %}active{% endif %}"
-            data-bs-toggle="tab" data-bs-target="#tab-terms" type="button">
-      Payment terms
-    </button>
-  </li>
-  {% endif %}
-</ul>
+  <ul class="nav nav-tabs mb-3 small">
+    <li class="nav-item">
+      <button class="nav-link {% if current_tab == 'rules' %}active{% endif %}"
+              data-bs-toggle="tab" data-bs-target="#tab-rules" type="button">
+        Margin factors
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link {% if current_tab == 'extras' %}active{% endif %}"
+              data-bs-toggle="tab" data-bs-target="#tab-extras" type="button">
+        Extras
+      </button>
+    </li>
+    {% if current_user.role in ['admin','owner'] %}
+    <li class="nav-item">
+      <button class="nav-link {% if current_tab == 'terms' %}active{% endif %}"
+              data-bs-toggle="tab" data-bs-target="#tab-terms" type="button">
+        Payment terms
+      </button>
+    </li>
+    {% endif %}
+  </ul>
 
-<div class="tab-content small">
-  <!-- Margin factors -->
-  <div class="tab-pane fade {% if current_tab == 'rules' %}show active{% endif %}" id="tab-rules">
-    <div class="row g-3">
-      <div class="col-md-5">
-        <div class="card shadow-sm">
-          <div class="card-header py-2">
-            <strong>{{ 'Edit margin factor' if editing_rule else 'Add margin factor' }}</strong>
-          </div>
-          <form method="post"
-                class="ajax-partial"
-                data-update-target="pricing-page-wrapper">
-            <input type="hidden" name="_action" value="{{ 'edit_rule_save' if editing_rule else 'add_rule' }}">
-            {% if editing_rule %}
-              <input type="hidden" name="rule_id" value="{{ editing_rule[0] }}">
-            {% endif %}
-            <div class="card-body py-2">
-              <div class="mb-2">
-                <label class="form-label">Micron min</label>
-                <input type="number" name="micron_min" class="form-control form-control-sm"
-                       min="1" required
-                       value="{{ editing_rule[1] if editing_rule else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Micron max</label>
-                <input type="number" name="micron_max" class="form-control form-control-sm"
-                       min="1" required
-                       value="{{ editing_rule[2] if editing_rule else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Film type</label>
-                <select name="film_type" class="form-select form-select-sm" required>
-                  <option value="">-- Select film type --</option>
+  <div class="tab-content small">
 
-                  <option value="Standard"
-                          {% if editing_rule and editing_rule[3]=='Standard' %}selected{% endif %}>
-                    Standard
-                  </option>
+    {# ======================= TAB: MARGIN FACTORS ======================= #}
+    <div class="tab-pane fade {% if current_tab == 'rules' %}show active{% endif %}" id="tab-rules">
+      <div class="row g-3">
 
-                  <option value="Super_Rigid"
-                          {% if editing_rule and editing_rule[3]=='Super_Rigid' %}selected{% endif %}>
-                    Super RIGID
-                  </option>
-
-                  <option value="Regular_Rigid"
-                          {% if editing_rule and editing_rule[3]=='Regular_Rigid' %}selected{% endif %}>
-                    Regular RIGID
-                  </option>
-
-                  <option value="Power"
-                          {% if editing_rule and editing_rule[3]=='Power' %}selected{% endif %}>
-                    Power
-                  </option>
-
-                  <option value="Power_Plus"
-                          {% if editing_rule and editing_rule[3]=='Power_Plus' %}selected{% endif %}>
-                    Power Plus
-                  </option>
-
-                  <option value="UVI_6m_Standard"
-                          {% if editing_rule and editing_rule[3]=='UVI_6m_Standard' %}selected{% endif %}>
-                    UVI (6 month) Standard
-                  </option>
-
-                  <option value="UVI_6m_Power"
-                          {% if editing_rule and editing_rule[3]=='UVI_6m_Power' %}selected{% endif %}>
-                    UVI (6 month) Power
-                  </option>
-
-                  <option value="UVI_6m_Power_Plus"
-                          {% if editing_rule and editing_rule[3]=='UVI_6m_Power_Plus' %}selected{% endif %}>
-                    UVI (6 month) Power Plus
-                  </option>
-
-                  <option value="UVI_12m_Standard"
-                          {% if editing_rule and editing_rule[3]=='UVI_12m_Standard' %}selected{% endif %}>
-                    UVI (12 month) Standard
-                  </option>
-
-                  <option value="UVI_12m_Power"
-                          {% if editing_rule and editing_rule[3]=='UVI_12m_Power' %}selected{% endif %}>
-                    UVI (12 month) Power
-                  </option>
-
-                  <option value="UVI_12m_Power_Plus"
-                          {% if editing_rule and editing_rule[3]=='UVI_12m_Power_Plus' %}selected{% endif %}>
-                    UVI (12 month) Power Plus
-                  </option>
-
-                  <option value="UV_Rigid"
-                          {% if editing_rule and editing_rule[3]=='UV_Rigid' %}selected{% endif %}>
-                    UV&Rigid
-                  </option>
-
-                  <option value="Prestretch"
-                          {% if editing_rule and editing_rule[3]=='Prestretch' %}selected{% endif %}>
-                    Prestretch
-                  </option>
-                </select>
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Operation</label>
-                <select name="is_manual" class="form-select form-select-sm" required>
-                  <option value="0" {% if editing_rule and not editing_rule[4] %}selected{% endif %}>Automatic</option>
-                  <option value="1" {% if editing_rule and editing_rule[4] %}selected{% endif %}>Manual</option>
-                </select>
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Roll weight min (kg)</label>
-                <input type="number" name="roll_weight_min" class="form-control form-control-sm"
-                       step="0.01" min="0"
-                       value="{{ editing_rule[5] if editing_rule else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Roll weight max (kg)</label>
-                <input type="number" name="roll_weight_max" class="form-control form-control-sm"
-                       step="0.01" min="0"
-                       value="{{ editing_rule[6] if editing_rule else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Margin %</label>
-                <input type="number" name="margin_percent" class="form-control form-control-sm"
-                       step="0.01" required
-                       value="{{ editing_rule[7] if editing_rule else '' }}">
-              </div>
+        {# --------- Form: Add/Edit margin factor --------- #}
+        <div class="col-md-5">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <strong>{{ 'Edit margin factor' if editing_rule else 'Add margin factor' }}</strong>
             </div>
-            <div class="card-footer text-end py-2">
-              <button type="submit"
-                      class="btn btn-primary btn-sm"
-                      data-loading-label="Saving...">
-                {{ 'Update factor' if editing_rule else 'Save factor' }}
-              </button>
+            <form method="post"
+                  class="ajax-partial"
+                  data-update-target="pricing-page-wrapper">
+              <input type="hidden" name="_action" value="{{ 'edit_rule_save' if editing_rule else 'add_rule' }}">
               {% if editing_rule %}
-                <a href="{{ url_for('settings.pricing_settings') }}"
-                   class="btn btn-secondary btn-sm">
-                  Cancel
-                </a>
+                <input type="hidden" name="rule_id" value="{{ editing_rule[0] }}">
               {% endif %}
-            </div>
-          </form>
-        </div>
-      </div>
+              <div class="card-body py-2">
+                <div class="mb-2">
+                  <label class="form-label">Micron min</label>
+                  <input type="number" name="micron_min" class="form-control form-control-sm"
+                         min="1" required
+                         value="{{ editing_rule[1] if editing_rule else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Micron max</label>
+                  <input type="number" name="micron_max" class="form-control form-control-sm"
+                         min="1" required
+                         value="{{ editing_rule[2] if editing_rule else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Film type</label>
+                  <select name="film_type" class="form-select form-select-sm" required>
+                    <option value="">-- Select film type --</option>
 
-      <div class="col-md-7">
-        <div class="card shadow-sm">
-          <div class="card-header py-2"><strong>Margin factors</strong></div>
-          <div class="card-body p-0">
-            <table class="table table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Micron</th>
-                  <th>Film type</th>
-                  <th>Operation</th>
-                  <th>Roll weight (kg)</th>
-                  <th class="text-end">Margin %</th>
-                  <th class="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in pricing_rules %}
-                <tr>
-                  <td>{{ r[1] }}–{{ r[2] }}</td>
-                  <td>{{ r[3] }}</td>
-                  <td>{{ 'Manual' if r[4] else 'Automatic' }}</td>
-                  <td>
-                    {% if r[5] or r[6] %}
-                      {{ "%.2f"|format(r[5] or 0) }}–{{ "%.2f"|format(r[6] or 0) }}
-                    {% else %}
-                      Any
-                    {% endif %}
-                  </td>
-                  <td class="text-end">{{ "%.2f"|format(r[7]) }}</td>
-                  <td class="text-end">
-                    <form method="post"
-                          class="d-inline ajax-partial"
-                          data-update-target="pricing-page-wrapper">
-                      <input type="hidden" name="_action" value="edit_rule_load">
-                      <input type="hidden" name="rule_id" value="{{ r[0] }}">
-                      <button type="submit"
-                              class="btn btn-sm btn-outline-secondary"
-                              data-loading-label="Loading...">
-                        Edit
-                      </button>
-                    </form>
-                    <form method="post"
-                          class="d-inline ajax-partial"
-                          data-update-target="pricing-page-wrapper"
-                          data-confirm="Delete this margin factor?">
-                      <input type="hidden" name="_action" value="delete_rule">
-                      <input type="hidden" name="rule_id" value="{{ r[0] }}">
-                      <button type="submit"
-                              class="btn btn-sm btn-outline-danger"
-                              data-loading-label="Deleting...">
-                        Delete
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="6" class="text-center text-muted py-2">No margin factors yet.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+                    <option value="Standard"
+                            {% if editing_rule and editing_rule[3]=='Standard' %}selected{% endif %}>
+                      Standard
+                    </option>
 
-  <!-- Extras -->
-  <div class="tab-pane fade {% if current_tab == 'extras' %}show active{% endif %}" id="tab-extras">
-    <div class="row g-3">
-      <div class="col-md-6">
-        <div class="card shadow-sm">
-          <div class="card-header py-2"><strong>Extras per kg</strong></div>
-          <form method="post"
-                class="ajax-partial"
-                data-update-target="pricing-page-wrapper">
-            <input type="hidden" name="_action" value="save_extras">
-            <div class="card-body py-2">
-              <div class="mb-2">
-                <label class="form-label">Color extra (USD/kg)</label>
-                <input type="number" name="color_extra_usd_per_kg" class="form-control form-control-sm"
-                      step="0.0001" min="0"
-                      value="{{ extras[1] if extras else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Prestretch extra (USD/kg)</label>
-                <input type="number" name="prestretch_extra_usd_per_kg" class="form-control form-control-sm"
-                      step="0.0001" min="0"
-                      value="{{ extras[2] if extras else '' }}">
-              </div>
+                    <option value="Super_Rigid"
+                            {% if editing_rule and editing_rule[3]=='Super_Rigid' %}selected{% endif %}>
+                      Super RIGID
+                    </option>
 
-              <!-- NEW: foreign sellers extra -->
-              <hr class="my-2">
-              <div class="mb-1">
-                <label class="form-label mb-0">Foreign sellers extra</label>
-                <div class="form-text mb-1" style="font-size: 0.7rem;">
-                  Applied only when pricing for foreign sellers (per kg, non-cumulative on EXW/FOB/CFR).
+                    <option value="Regular_Rigid"
+                            {% if editing_rule and editing_rule[3]=='Regular_Rigid' %}selected{% endif %}>
+                      Regular RIGID
+                    </option>
+
+                    <option value="Power"
+                            {% if editing_rule and editing_rule[3]=='Power' %}selected{% endif %}>
+                      Power
+                    </option>
+
+                    <option value="Power_Plus"
+                            {% if editing_rule and editing_rule[3]=='Power_Plus' %}selected{% endif %}>
+                      Power Plus
+                    </option>
+
+                    <option value="UVI_6m_Standard"
+                            {% if editing_rule and editing_rule[3]=='UVI_6m_Standard' %}selected{% endif %}>
+                      UVI (6 month) Standard
+                    </option>
+
+                    <option value="UVI_6m_Power"
+                            {% if editing_rule and editing_rule[3]=='UVI_6m_Power' %}selected{% endif %}>
+                      UVI (6 month) Power
+                    </option>
+
+                    <option value="UVI_6m_Power_Plus"
+                            {% if editing_rule and editing_rule[3]=='UVI_6m_Power_Plus' %}selected{% endif %}>
+                      UVI (6 month) Power Plus
+                    </option>
+
+                    <option value="UVI_12m_Standard"
+                            {% if editing_rule and editing_rule[3]=='UVI_12m_Standard' %}selected{% endif %}>
+                      UVI (12 month) Standard
+                    </option>
+
+                    <option value="UVI_12m_Power"
+                            {% if editing_rule and editing_rule[3]=='UVI_12m_Power' %}selected{% endif %}>
+                      UVI (12 month) Power
+                    </option>
+
+                    <option value="UVI_12m_Power_Plus"
+                            {% if editing_rule and editing_rule[3]=='UVI_12m_Power_Plus' %}selected{% endif %}>
+                      UVI (12 month) Power Plus
+                    </option>
+
+                    <option value="UV_Rigid"
+                            {% if editing_rule and editing_rule[3]=='UV_Rigid' %}selected{% endif %}>
+                      UV&Rigid
+                    </option>
+
+                    <option value="Prestretch"
+                            {% if editing_rule and editing_rule[3]=='Prestretch' %}selected{% endif %}>
+                      Prestretch
+                    </option>
+                  </select>
+                </div>
+
+                <div class="mb-2">
+                  <label class="form-label">Packing type</label>
+                  <select name="packing_type_id" class="form-select form-select-sm" required>
+                    <option value="">-- Select packing type --</option>
+                    {% for pt in packing_types %}
+                      {# pt[0] = id, pt[1] = name #}
+                      <option value="{{ pt[0] }}"
+                              {% if editing_rule and editing_rule[4] == pt[0] %}selected{% endif %}>
+                        {{ pt[1] }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="mb-2">
+                  <label class="form-label">Roll weight min (kg)</label>
+                  <input type="number" name="roll_weight_min" class="form-control form-control-sm"
+                         step="0.01" min="0"
+                         value="{{ editing_rule[5] if editing_rule else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Roll weight max (kg)</label>
+                  <input type="number" name="roll_weight_max" class="form-control form-control-sm"
+                         step="0.01" min="0"
+                         value="{{ editing_rule[6] if editing_rule else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Margin %</label>
+                  <input type="number" name="margin_percent" class="form-control form-control-sm"
+                         step="0.01" required
+                         value="{{ editing_rule[7] if editing_rule else '' }}">
                 </div>
               </div>
-              <div class="mb-2">
-                <label class="form-label">Mode</label>
-                <select name="foreign_extra_mode" class="form-select form-select-sm">
-                  {% set mode = extras[3] if extras and extras|length > 3 else 'percent' %}
-                  <option value="percent" {% if mode == 'percent' %}selected{% endif %}>
-                    Percent of selling price (%)
-                  </option>
-                  <option value="per_unit" {% if mode == 'per_unit' %}selected{% endif %}>
-                    Fixed amount per kg gross (USD/kg)
-                  </option>
-                </select>
+              <div class="card-footer text-end py-2">
+                <button type="submit"
+                        class="btn btn-primary btn-sm"
+                        data-loading-label="Saving...">
+                  {{ 'Update factor' if editing_rule else 'Save factor' }}
+                </button>
+                {% if editing_rule %}
+                  <a href="{{ url_for('settings.pricing_settings') }}"
+                     class="btn btn-secondary btn-sm">
+                    Cancel
+                  </a>
+                {% endif %}
               </div>
-              <div class="mb-2">
-                <label class="form-label">Foreign extra value</label>
-                <input type="number" name="foreign_extra_value" class="form-control form-control-sm"
-                      step="0.0001" min="0"
-                      value="{{ extras[4] if extras and extras|length > 4 else '' }}">
+            </form>
+          </div>
+        </div>
+
+        {# --------- Table: Margin factors --------- #}
+        <div class="col-md-7">
+          <div class="card shadow-sm">
+            <div class="card-header py-2"><strong>Margin factors</strong></div>
+            <div class="card-body p-0">
+
+              {% set packing_type_name_by_id = {} %}
+              {% for pt in packing_types %}
+                {% set _ = packing_type_name_by_id.update({pt[0]: pt[1]}) %}
+              {% endfor %}
+
+              <table class="table table-sm mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Micron</th>
+                    <th>Film type</th>
+                    <th>Packing type</th>
+                    <th>Roll weight (kg)</th>
+                    <th class="text-end">Margin %</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in pricing_rules %}
+                  <tr>
+                    <td>{{ r[1] }}–{{ r[2] }}</td>
+                    <td>{{ r[3] }}</td>
+                    <td>{{ packing_type_name_by_id.get(r[4], r[4]) }}</td>
+                    <td>
+                      {% if r[5] or r[6] %}
+                        {{ "%.2f"|format(r[5] or 0) }}–{{ "%.2f"|format(r[6] or 0) }}
+                      {% else %}
+                        Any
+                      {% endif %}
+                    </td>
+                    <td class="text-end">{{ "%.2f"|format(r[7]) }}</td>
+                    <td class="text-end">
+                      <form method="post"
+                            class="d-inline ajax-partial"
+                            data-update-target="pricing-page-wrapper">
+                        <input type="hidden" name="_action" value="edit_rule_load">
+                        <input type="hidden" name="rule_id" value="{{ r[0] }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-loading-label="Loading...">
+                          Edit
+                        </button>
+                      </form>
+                      <form method="post"
+                            class="d-inline ajax-partial"
+                            data-update-target="pricing-page-wrapper"
+                            data-confirm="Delete this margin factor?">
+                        <input type="hidden" name="_action" value="delete_rule">
+                        <input type="hidden" name="rule_id" value="{{ r[0] }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-danger"
+                                data-loading-label="Deleting...">
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-2">No margin factors yet.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    {# ======================= TAB: EXTRAS ======================= #}
+    <div class="tab-pane fade {% if current_tab == 'extras' %}show active{% endif %}" id="tab-extras">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header py-2"><strong>Extras per kg</strong></div>
+            <form method="post"
+                  class="ajax-partial"
+                  data-update-target="pricing-page-wrapper">
+              <input type="hidden" name="_action" value="save_extras">
+              <div class="card-body py-2">
+                <div class="mb-2">
+                  <label class="form-label">Color extra (USD/kg)</label>
+                  <input type="number" name="color_extra_usd_per_kg" class="form-control form-control-sm"
+                         step="0.0001" min="0"
+                         value="{{ extras[1] if extras else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Prestretch extra (USD/kg)</label>
+                  <input type="number" name="prestretch_extra_usd_per_kg" class="form-control form-control-sm"
+                         step="0.0001" min="0"
+                         value="{{ extras[2] if extras else '' }}">
+                </div>
+
+                <hr class="my-2">
+                <div class="mb-1">
+                  <label class="form-label mb-0">Foreign sellers extra</label>
+                  <div class="form-text mb-1" style="font-size: 0.7rem;">
+                    Applied only when pricing for foreign sellers (per kg, non-cumulative on EXW/FOB/CFR).
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Mode</label>
+                  <select name="foreign_extra_mode" class="form-select form-select-sm">
+                    {% set mode = extras[3] if extras and extras|length > 3 else 'percent' %}
+                    <option value="percent" {% if mode == 'percent' %}selected{% endif %}>
+                      Percent of selling price (%)
+                    </option>
+                    <option value="per_unit" {% if mode == 'per_unit' %}selected{% endif %}>
+                      Fixed amount per kg gross (USD/kg)
+                    </option>
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Foreign extra value</label>
+                  <input type="number" name="foreign_extra_value" class="form-control form-control-sm"
+                         step="0.0001" min="0"
+                         value="{{ extras[4] if extras and extras|length > 4 else '' }}">
+                </div>
               </div>
-            </div>
-            <div class="card-footer text-end py-2">
-              <button type="submit"
-                      class="btn btn-primary btn-sm"
-                      data-loading-label="Saving...">
-                Save extras
-              </button>
-            </div>
-          </form>
+              <div class="card-footer text-end py-2">
+                <button type="submit"
+                        class="btn btn-primary btn-sm"
+                        data-loading-label="Saving...">
+                  Save extras
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  {% if current_user.role in ['admin','owner'] %}
-  <!-- Payment terms -->
-  <div class="tab-pane fade {% if current_tab == 'terms' %}show active{% endif %}" id="tab-terms">
-    <div class="row g-3">
-      <div class="col-md-4">
-        <div class="card shadow-sm">
-          <div class="card-header py-2">
-            <strong>{{ 'Edit payment term' if editing_term else 'Add payment term' }}</strong>
-          </div>
-          <form method="post"
-                class="ajax-partial"
-                data-update-target="pricing-page-wrapper">
-            <input type="hidden" name="_action" value="{{ 'edit_payment_term_save' if editing_term else 'add_payment_term' }}">
-            {% if editing_term %}
-              <input type="hidden" name="pt_id" value="{{ editing_term[0] }}">
-            {% endif %}
-            <div class="card-body py-2">
-              <div class="mb-2">
-                <label class="form-label">Name</label>
-                <input type="text" name="pt_name" class="form-control form-control-sm"
-                       placeholder="e.g. Cash, 30 days" required
-                       value="{{ editing_term[1] if editing_term else '' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Credit days</label>
-                <input type="number" name="credit_days" class="form-control form-control-sm"
-                       min="0" required
-                       value="{{ editing_term[2] if editing_term else '0' }}">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Annual rate % (for credit)</label>
-                <input type="number" name="annual_rate_percent" class="form-control form-control-sm"
-                       step="0.01" min="0" required
-                       value="{{ editing_term[3] if editing_term else '0.00' }}">
-              </div>
+    {# ======================= TAB: PAYMENT TERMS ======================= #}
+    {% if current_user.role in ['admin','owner'] %}
+    <div class="tab-pane fade {% if current_tab == 'terms' %}show active{% endif %}" id="tab-terms">
+      <div class="row g-3">
+
+        <div class="col-md-4">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <strong>{{ 'Edit payment term' if editing_term else 'Add payment term' }}</strong>
             </div>
-            <div class="card-footer text-end py-2">
-              <button type="submit"
-                      class="btn btn-primary btn-sm"
-                      data-loading-label="Saving...">
-                {{ 'Update term' if editing_term else 'Save term' }}
-              </button>
+            <form method="post"
+                  class="ajax-partial"
+                  data-update-target="pricing-page-wrapper">
+              <input type="hidden" name="_action" value="{{ 'edit_payment_term_save' if editing_term else 'add_payment_term' }}">
               {% if editing_term %}
-                <a href="{{ url_for('settings.pricing_settings') }}"
-                   class="btn btn-secondary btn-sm">
-                  Cancel
-                </a>
+                <input type="hidden" name="pt_id" value="{{ editing_term[0] }}">
               {% endif %}
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div class="col-md-8">
-        <div class="card shadow-sm">
-          <div class="card-header py-2"><strong>Payment terms</strong></div>
-          <div class="card-body p-0">
-            <table class="table table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Name</th>
-                  <th class="text-end">Credit days</th>
-                  <th class="text-end">Annual rate %</th>
-                  <th class="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for pt in payment_terms %}
-                <tr>
-                  <td>{{ pt[1] }}</td>
-                  <td class="text-end">{{ pt[2] }}</td>
-                  <td class="text-end">{{ "%.2f"|format(pt[3]) }}</td>
-                  <td class="text-end">
-                    <form method="post"
-                          class="d-inline ajax-partial"
-                          data-update-target="pricing-page-wrapper">
-                      <input type="hidden" name="_action" value="edit_payment_term_load">
-                      <input type="hidden" name="pt_id" value="{{ pt[0] }}">
-                      <button type="submit"
-                              class="btn btn-sm btn-outline-secondary"
-                              data-loading-label="Loading...">
-                        Edit
-                      </button>
-                    </form>
-                    <form method="post"
-                          class="d-inline ajax-partial"
-                          data-update-target="pricing-page-wrapper"
-                          data-confirm="Delete this payment term?">
-                      <input type="hidden" name="_action" value="delete_payment_term">
-                      <input type="hidden" name="pt_id" value="{{ pt[0] }}">
-                      <button type="submit"
-                              class="btn btn-sm btn-outline-danger"
-                              data-loading-label="Deleting...">
-                        Delete
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="4" class="text-center text-muted py-2">No payment terms yet.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+              <div class="card-body py-2">
+                <div class="mb-2">
+                  <label class="form-label">Name</label>
+                  <input type="text" name="pt_name" class="form-control form-control-sm"
+                         placeholder="e.g. Cash, 30 days" required
+                         value="{{ editing_term[1] if editing_term else '' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Credit days</label>
+                  <input type="number" name="credit_days" class="form-control form-control-sm"
+                         min="0" required
+                         value="{{ editing_term[2] if editing_term else '0' }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Annual rate % (for credit)</label>
+                  <input type="number" name="annual_rate_percent" class="form-control form-control-sm"
+                         step="0.01" min="0" required
+                         value="{{ editing_term[3] if editing_term else '0.00' }}">
+                </div>
+              </div>
+              <div class="card-footer text-end py-2">
+                <button type="submit"
+                        class="btn btn-primary btn-sm"
+                        data-loading-label="Saving...">
+                  {{ 'Update term' if editing_term else 'Save term' }}
+                </button>
+                {% if editing_term %}
+                  <a href="{{ url_for('settings.pricing_settings') }}"
+                     class="btn btn-secondary btn-sm">
+                    Cancel
+                  </a>
+                {% endif %}
+              </div>
+            </form>
           </div>
         </div>
-      </div>
 
+        <div class="col-md-8">
+          <div class="card shadow-sm">
+            <div class="card-header py-2"><strong>Payment terms</strong></div>
+            <div class="card-body p-0">
+              <table class="table table-sm mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th class="text-end">Credit days</th>
+                    <th class="text-end">Annual rate %</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for pt in payment_terms %}
+                  <tr>
+                    <td>{{ pt[1] }}</td>
+                    <td class="text-end">{{ pt[2] }}</td>
+                    <td class="text-end">{{ "%.2f"|format(pt[3]) }}</td>
+                    <td class="text-end">
+                      <form method="post"
+                            class="d-inline ajax-partial"
+                            data-update-target="pricing-page-wrapper">
+                        <input type="hidden" name="_action" value="edit_payment_term_load">
+                        <input type="hidden" name="pt_id" value="{{ pt[0] }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-loading-label="Loading...">
+                          Edit
+                        </button>
+                      </form>
+                      <form method="post"
+                            class="d-inline ajax-partial"
+                            data-update-target="pricing-page-wrapper"
+                            data-confirm="Delete this payment term?">
+                        <input type="hidden" name="_action" value="delete_payment_term">
+                        <input type="hidden" name="pt_id" value="{{ pt[0] }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-danger"
+                                data-loading-label="Deleting...">
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="4" class="text-center text-muted py-2">No payment terms yet.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
+    {% endif %}
+
   </div>
-  {% endif %}
-</div>
 </div>
 {% endblock %}

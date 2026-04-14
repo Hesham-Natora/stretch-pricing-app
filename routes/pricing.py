@@ -305,8 +305,11 @@ def calculate_line_price_bulk(
 
     # ===== 4) Margin + extras + payment term =====
 
-    # margin rule (micron / film_type / is_manual / roll_weight)
-    rules_for_key = margin_rules_map.get((film_type, is_manual), [])
+    # margin rule (micron / film_type / packing_type / roll_weight)
+    if not packing_type_id:
+        return None, "Packing type is required for margin"
+
+    rules_for_key = margin_rules_map.get((film_type, int(packing_type_id)), [])
     margin_percent = None
     for r in rules_for_key:
         if r["micron_min"] <= micron <= r["micron_max"]:
@@ -604,8 +607,13 @@ def load_pricing_static_data(cur, egp_per_usd: float):
     # --- pricing_rules bulk ---
     cur.execute(
         """
-        SELECT micron_min, micron_max, film_type, is_manual,
-               roll_weight_min, roll_weight_max, margin_percent
+        SELECT micron_min,
+               micron_max,
+               film_type,
+               packing_type_id,
+               roll_weight_min,
+               roll_weight_max,
+               margin_percent
         FROM pricing_rules
         """
     )
@@ -615,12 +623,12 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         micron_min,
         micron_max,
         film_type,
-        is_manual,
+        packing_type_id,
         rw_min,
         rw_max,
         margin_percent,
     ) in rows_rules:
-        key = ((film_type or "standard").strip(), bool(is_manual))
+        key = ((film_type or "standard").strip(), int(packing_type_id or 0))
         margin_rules_map[key].append(
             {
                 "micron_min": int(micron_min or 0),
