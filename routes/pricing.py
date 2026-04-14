@@ -57,6 +57,52 @@ def round_3(x) -> float:
     return float(
         Decimal(str(x)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
     )
+    
+def select_packing_profile_id_for_item(
+    *,
+    product_id: int,
+    packing_type_id: int | None,
+    pallet_type_id: int | None,
+    gross_kg_per_roll: float,
+    packing_profile_overrides: dict,
+    packing_profiles_by_id: dict,
+    global_profile_by_key: dict,
+) -> int | None:
+    """
+    يختار packing_profile_id المناسب:
+    1) لو فيه override للمنتج في المدى (roll_weight_min/max) يرجّع البروفايل ده.
+    2) غير كده يرجع global profile لنفس (packing_type_id, pallet_type_id) لو موجود.
+    3) وإلا None.
+    """
+    if not packing_type_id or not pallet_type_id:
+        return None
+
+    # 1) override per product + وزن الرول
+    overrides_for_product = packing_profile_overrides.get(product_id, [])
+    for ov in overrides_for_product:
+        w_min = ov["roll_weight_min"]
+        w_max = ov["roll_weight_max"]
+        if (w_min == 0 and w_max == 0) or (
+            gross_kg_per_roll >= w_min
+            and (w_max == 0 or gross_kg_per_roll <= w_max)
+        ):
+            pid = ov["packing_profile_id"]
+            if pid in packing_profiles_by_id:
+                prof = packing_profiles_by_id[pid]
+                # تأكد أن نوع الباكنج + نوع البالته متطابقين
+                if (
+                    prof["packing_type_id"] == packing_type_id
+                    and prof["pallet_type_id"] == pallet_type_id
+                ):
+                    return pid
+
+    # 2) global fallback
+    key = (packing_type_id, pallet_type_id)
+    pid = global_profile_by_key.get(key)
+    if pid and pid in packing_profiles_by_id:
+        return pid
+
+    return None
 
 def calculate_line_price_bulk(
     *,
@@ -71,7 +117,10 @@ def calculate_line_price_bulk(
     pallet_type_id: int | None,
     packing_type_id: int | None,
     core_price_per_kg_usd: float,
-    packing_cost_per_pallet_map: dict,
+    packing_profile_cost_map: dict,
+    packing_profiles_by_id: dict,
+    packing_profile_overrides: dict,
+    global_profile_by_key: dict,
     # bulk data maps
     product_info_map: dict,
     product_roll_bom_map: dict,
@@ -233,13 +282,26 @@ def calculate_line_price_bulk(
         and rolls_per_pallet
         and net_kg_per_roll_safe > 0
     ):
-        pallet_key = (packing_type_id, pallet_type_id)
-        pack_info = packing_cost_per_pallet_map.get(pallet_key)
-        if pack_info:
-            total_packing_usd_per_pallet = pack_info["usd"]
-            if rolls_per_pallet > 0:
-                packing_cost_per_unit = total_packing_usd_per_pallet / rolls_per_pallet
-                packing_cost_per_kg = packing_cost_per_unit / net_kg_per_roll_safe
+        profile_id = select_packing_profile_id_for_item(
+            product_id=product_id,
+            packing_type_id=packing_type_id,
+            pallet_type_id=pallet_type_id,
+            gross_kg_per_roll=gross_kg_per_roll,
+            packing_profile_overrides=packing_profile_overrides,
+            packing_profiles_by_id=packing_profiles_by_id,
+            global_profile_by_key=global_profile_by_key,
+        )
+        if profile_id:
+            cost_info = packing_profile_cost_map.get(profile_id)
+            if cost_info:
+                total_packing_usd_per_pallet = cost_info["usd"]
+                if rolls_per_pallet > 0:
+                    packing_cost_per_unit = (
+                        total_packing_usd_per_pallet / rolls_per_pallet
+                    )
+                    packing_cost_per_kg = (
+                        packing_cost_per_unit / net_kg_per_roll_safe
+                    )
 
     # ===== 4) Margin + extras + payment term =====
 
@@ -508,7 +570,11 @@ def load_pricing_static_data(cur, egp_per_usd: float):
                 "foreign_extra_mode": "percent",
                 "foreign_extra_value": 0.0,
             },
-            "packing_cost_per_pallet_map": defaultdict(lambda: {"usd": 0.0, "egp": 0.0}),
+            "packing_profiles_by_id": {},
+            "global_profile_by_key": {},
+            "packing_profile_overrides": defaultdict(list),
+            "packing_profile_cost_map": defaultdict(lambda: {"usd": 0.0, "egp": 0.0}),
+            "packing_cost_per_pallet_global": {},
             "energy_rate": 0.0,
             "core_price_per_kg_usd": 0.0,
             "product_machine_map": defaultdict(list),
@@ -644,44 +710,128 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         else:
             core_price_per_kg_usd = core_price
 
-    # --- packing_cost_per_pallet_map ---
+    # --- packing profiles + items + overrides ---
+
+    # 1) load packing_profiles
     cur.execute(
         """
         SELECT
-            pi.packing_type_id,
-            pi.pallet_type_id,
+            id,
+            packing_type_id,
+            pallet_type_id,
+            is_global,
+            is_active
+        FROM packing_profiles
+        WHERE is_active = TRUE
+        """
+    )
+    rows_profiles = cur.fetchall()
+    profiles_by_id = {}
+    global_profile_by_key = {}  # (packing_type_id, pallet_type_id) -> profile_id
+
+    for pid, ptype_id, plt_id, is_global, is_active in rows_profiles:
+        pid = int(pid)
+        ptype_id = int(ptype_id)
+        plt_id = int(plt_id)
+        profiles_by_id[pid] = {
+            "packing_type_id": ptype_id,
+            "pallet_type_id": plt_id,
+            "is_global": bool(is_global),
+        }
+        if is_global:
+            global_profile_by_key[(ptype_id, plt_id)] = pid
+
+    # 2) load packing_items by packing_profile_id
+    cur.execute(
+        """
+        SELECT
+            pi.packing_profile_id,
             pi.material_id,
             pi.quantity_per_pallet,
             m.price_per_unit,
             m.currency
         FROM packing_items pi
         JOIN materials m ON m.id = pi.material_id
+        WHERE pi.packing_profile_id IS NOT NULL
         """
     )
-    packing_rows = cur.fetchall()
-    packing_cost_per_pallet_map = defaultdict(lambda: {"usd": 0.0, "egp": 0.0})
+    rows_packing_items = cur.fetchall()
+
+    # تكلفة البالته لكل profile_id
+    packing_profile_cost_map = defaultdict(lambda: {"usd": 0.0, "egp": 0.0})
     for (
-        packing_type_id,
-        pallet_type_id,
+        packing_profile_id,
         material_id,
         qty_per_pallet,
         price_per_unit,
         currency,
-    ) in packing_rows:
+    ) in rows_packing_items:
+        if not packing_profile_id:
+            continue
         qty = float(qty_per_pallet or 0)
         price = float(price_per_unit or 0)
         curr = (currency or "USD").upper()
-        key_pp = (int(packing_type_id), int(pallet_type_id))
+        pid = int(packing_profile_id)
         if curr == "USD":
-            packing_cost_per_pallet_map[key_pp]["usd"] += qty * price
+            packing_profile_cost_map[pid]["usd"] += qty * price
         else:
-            packing_cost_per_pallet_map[key_pp]["egp"] += qty * price
+            packing_profile_cost_map[pid]["egp"] += qty * price
 
-    for key, val in packing_cost_per_pallet_map.items():
+    # حوّل أي EGP إلى USD
+    for pid, val in packing_profile_cost_map.items():
         egp_val = val["egp"]
         if egp_val and egp_per_usd > 0:
             val["usd"] += egp_val / egp_per_usd
         val["egp"] = 0.0
+
+    # 3) بنينا map نهائي للبحث أثناء التسعير:
+    #    - global: لكل (packing_type_id, pallet_type_id)
+    #    - profile_cost_map: لكل profile_id
+    packing_cost_per_pallet_global = {}  # (packing_type_id, pallet_type_id) -> usd
+    for (ptype_id, plt_id), profile_id in global_profile_by_key.items():
+        cost_info = packing_profile_cost_map.get(profile_id)
+        if cost_info:
+            packing_cost_per_pallet_global[(ptype_id, plt_id)] = cost_info["usd"]
+
+    # 4) overrides: product + roll_weight نطاق
+    cur.execute(
+        """
+        SELECT
+            id,
+            packing_profile_id,
+            product_id,
+            roll_weight_min,
+            roll_weight_max,
+            is_active
+        FROM packing_profile_overrides
+        WHERE is_active = TRUE
+        """
+    )
+    rows_overrides = cur.fetchall()
+
+    packing_profile_overrides = defaultdict(list)
+    for (
+        oid,
+        packing_profile_id,
+        product_id,
+        rw_min,
+        rw_max,
+        is_active,
+    ) in rows_overrides:
+        if not is_active:
+            continue
+        packing_profile_overrides[int(product_id)].append(
+            {
+                "override_id": int(oid),
+                "packing_profile_id": int(packing_profile_id),
+                "roll_weight_min": float(rw_min or 0.0),
+                "roll_weight_max": float(rw_max or 0.0),
+            }
+        )
+
+    # sort overrides by weight range
+    for pid, lst in packing_profile_overrides.items():
+        lst.sort(key=lambda r: (r["roll_weight_min"], r["roll_weight_max"]))
 
     # --- product_machines + machines (kwh, capacity, utilization) ---
     cur.execute(
@@ -845,7 +995,11 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         "margin_rules_map": margin_rules_map,
         "payment_terms_map": payment_terms_map,
         "pricing_extras": pricing_extras,
-        "packing_cost_per_pallet_map": packing_cost_per_pallet_map,
+        "packing_profiles_by_id": profiles_by_id,
+        "global_profile_by_key": global_profile_by_key,
+        "packing_profile_overrides": packing_profile_overrides,
+        "packing_profile_cost_map": packing_profile_cost_map,
+        "packing_cost_per_pallet_global": packing_cost_per_pallet_global,
         "energy_rate": energy_rate,
         "core_price_per_kg_usd": core_price_per_kg_usd,
         "product_machine_map": product_machine_map,
@@ -1776,9 +1930,10 @@ def pricing_screen():
                         margin_rules_map = static_data["margin_rules_map"]
                         payment_terms_map = static_data["payment_terms_map"]
                         pricing_extras = static_data["pricing_extras"]
-                        packing_cost_per_pallet_map = static_data[
-                            "packing_cost_per_pallet_map"
-                        ]
+                        packing_profiles_by_id = static_data["packing_profiles_by_id"]
+                        global_profile_by_key = static_data["global_profile_by_key"]
+                        packing_profile_overrides = static_data["packing_profile_overrides"]
+                        packing_profile_cost_map = static_data["packing_profile_cost_map"]
                         energy_rate = static_data["energy_rate"]
                         core_price_per_kg_usd = static_data["core_price_per_kg_usd"]
                         product_machine_map = static_data["product_machine_map"]
@@ -1914,7 +2069,6 @@ def pricing_screen():
                 product_id=product_id,
                 is_colored=is_colored,
                 selected_payment_term_id=selected_payment_term_id,
-                # نبعَت مجموع line + global
                 discount_percent=line_discount,
                 roll_weight_kg=roll_weight_kg,
                 core_weight_kg=core_weight_kg,
@@ -1923,7 +2077,10 @@ def pricing_screen():
                 pallet_type_id=pallet_type_id,
                 packing_type_id=packing_type_id,
                 core_price_per_kg_usd=core_price_per_kg_usd,
-                packing_cost_per_pallet_map=packing_cost_per_pallet_map,
+                packing_profile_cost_map=packing_profile_cost_map,
+                packing_profiles_by_id=packing_profiles_by_id,
+                packing_profile_overrides=packing_profile_overrides,
+                global_profile_by_key=global_profile_by_key,
                 # bulk data maps
                 product_info_map=product_info_map_cached,
                 product_roll_bom_map=product_roll_bom_map,
@@ -1964,18 +2121,33 @@ def pricing_screen():
             core_cost_per_unit_roll = 0.0
             core_weight = float(core_weight_kg or 0)
             if core_weight > 0 and core_price_per_kg_usd > 0:
-                core_cost_per_unit_roll = core_price_per_kg_usd * core_weight
+                core_cost_per_unit_roll = core_price_per_kg_usd * core_weight  # USD per roll
 
             packing_cost_per_unit_roll = 0.0
             try:
                 rolls_per_pallet_val = float(rolls_per_pallet or 0)
-                pallet_key = (packing_type_id, pallet_type_id)
-                pack_info = packing_cost_per_pallet_map.get(pallet_key)
-                if pack_info and rolls_per_pallet_val > 0:
-                    total_packing_usd_per_pallet = pack_info["usd"]
-                    packing_cost_per_unit_roll = (
-                        total_packing_usd_per_pallet / rolls_per_pallet_val
+                if (
+                    packing_type_id
+                    and pallet_type_id
+                    and rolls_per_pallet_val > 0
+                    and roll_weight_kg > 0
+                ):
+                    profile_id_for_snapshot = select_packing_profile_id_for_item(
+                        product_id=product_id,
+                        packing_type_id=packing_type_id,
+                        pallet_type_id=pallet_type_id,
+                        gross_kg_per_roll=roll_weight_kg,
+                        packing_profile_overrides=packing_profile_overrides,
+                        packing_profiles_by_id=packing_profiles_by_id,
+                        global_profile_by_key=global_profile_by_key,
                     )
+                    if profile_id_for_snapshot:
+                        pack_info = packing_profile_cost_map.get(profile_id_for_snapshot)
+                        if pack_info:
+                            total_packing_usd_per_pallet = pack_info["usd"]
+                            packing_cost_per_unit_roll = (
+                                total_packing_usd_per_pallet / rolls_per_pallet_val
+                            )
             except Exception:
                 packing_cost_per_unit_roll = 0.0
 
@@ -1983,7 +2155,6 @@ def pricing_screen():
                 core_cost_per_unit_roll + packing_cost_per_unit_roll
             )
 
-            # نخزّنهم جوه line_result عشان الـ snapshot يستخدمهم
             line_result["core_cost_unit_roll"] = core_cost_per_unit_roll
             line_result["packing_cost_unit_roll"] = packing_cost_per_unit_roll
             line_result["packing_core_cost_unit_roll"] = packing_core_cost_unit_roll

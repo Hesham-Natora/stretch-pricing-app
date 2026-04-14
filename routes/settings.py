@@ -1121,6 +1121,16 @@ def delete_import_profile(profile_id):
 # Packing Settings
 # -----------------------------
 def _load_packing_context(cur):
+    """
+    يحمل كل الداتا الخاصة بالباكنج لإستخدامها في شاشة الإعدادات:
+    - packing_types, pallet_types, packing_materials
+    - packing_profiles
+    - packing_items (مرتبطة بالـ profiles)
+    - profile_costs: إجمالي تكلفة البالتة لكل profile
+    - packing_profile_overrides: أوفررايد per product + roll weight
+    """
+
+    # ===== 1) Packing & pallet types =====
     cur.execute(
         """
         SELECT id, name, COALESCE(description, '')
@@ -1139,6 +1149,7 @@ def _load_packing_context(cur):
     )
     pallet_types = cur.fetchall()
 
+    # ===== 2) PACKING materials =====
     cur.execute(
         """
         SELECT id, code, name, unit, price_per_unit
@@ -1149,10 +1160,33 @@ def _load_packing_context(cur):
     )
     packing_materials = cur.fetchall()
 
+    # ===== 3) Packing profiles (الرئيسية) =====
+    cur.execute(
+        """
+        SELECT
+            pp.id,
+            pp.name,
+            pp.packing_type_id,
+            pt.name AS packing_type_name,
+            pp.pallet_type_id,
+            plt.name AS pallet_type_name,
+            pp.is_global,
+            pp.is_active
+        FROM packing_profiles pp
+        JOIN packing_types pt ON pt.id = pp.packing_type_id
+        JOIN pallet_types  plt ON plt.id = pp.pallet_type_id
+        ORDER BY pt.id, plt.id, pp.id
+        """
+    )
+    packing_profiles = cur.fetchall()
+
+    # ===== 4) Items داخل كل profile =====
     cur.execute(
         """
         SELECT
             pi.id,
+            pi.packing_profile_id,
+            pp.name AS profile_name,
             pt.id  AS packing_type_id,
             pt.name AS packing_type_name,
             plt.id AS pallet_type_id,
@@ -1164,18 +1198,21 @@ def _load_packing_context(cur):
             pi.quantity_per_pallet,
             m.price_per_unit
         FROM packing_items pi
-        LEFT JOIN packing_types pt ON pi.packing_type_id = pt.id
-        LEFT JOIN pallet_types  plt ON pi.pallet_type_id = plt.id
-        LEFT JOIN materials     m   ON pi.material_id = m.id
-        ORDER BY pt.id, plt.id, pi.id
+        JOIN packing_profiles pp ON pp.id = pi.packing_profile_id
+        JOIN packing_types   pt ON pt.id = pp.packing_type_id
+        JOIN pallet_types    plt ON plt.id = pp.pallet_type_id
+        JOIN materials       m  ON m.id = pi.material_id
+        ORDER BY pt.id, plt.id, pp.id, pi.id
         """
     )
     packing_items = cur.fetchall()
 
-    packing_costs: dict[tuple[int, int], dict] = {}
-
+    # إجمالي تكلفة البالتة لكل profile
+    profile_costs: dict[int, float] = {}
     for (
         item_id,
+        packing_profile_id,
+        profile_name,
         packing_type_id,
         packing_type_name,
         pallet_type_id,
@@ -1191,28 +1228,67 @@ def _load_packing_context(cur):
         price = float(price_per_unit or 0)
         line_cost = qty * price
 
-        key = (packing_type_id, pallet_type_id or 0)
-        if key not in packing_costs:
-            packing_costs[key] = {
-                "packing_type_name": packing_type_name,
-                "pallet_type_name": pallet_type_name,
-                "total_cost_per_pallet": 0.0,
-            }
+        if packing_profile_id not in profile_costs:
+            profile_costs[packing_profile_id] = 0.0
+        profile_costs[packing_profile_id] += line_cost
 
-        packing_costs[key]["total_cost_per_pallet"] += line_cost
+    # ===== 5) Overrides per product + roll weight =====
+    cur.execute(
+        """
+        SELECT
+            o.id,
+            o.packing_profile_id,
+            pp.name AS profile_name,
+            o.product_id,
+            p.code AS product_code,
+            p.micron,
+            p.film_type,
+            p.stretchability_percent,
+            o.roll_weight_min,
+            o.roll_weight_max,
+            o.is_active
+        FROM packing_profile_overrides o
+        JOIN packing_profiles pp ON pp.id = o.packing_profile_id
+        JOIN products        p  ON p.id = o.product_id
+        ORDER BY p.code, o.roll_weight_min, o.roll_weight_max, o.id
+        """
+    )
+    packing_profile_overrides = cur.fetchall()
 
-    return packing_types, pallet_types, packing_materials, packing_items, packing_costs
+    # ===== 6) Products list for UI =====
+    cur.execute(
+        """
+        SELECT id, code, micron, film_type, stretchability_percent
+        FROM products
+        ORDER BY code
+        """
+    )
+    products = cur.fetchall()
+
+    return (
+        packing_types,
+        pallet_types,
+        packing_materials,
+        packing_profiles,
+        packing_items,
+        profile_costs,
+        packing_profile_overrides,
+        products,
+    )
 
 
-@settings_bp.route("/settings/packing", methods=["GET"])
+@settings_bp.route("/packing", methods=["GET"])
 def packing_settings():
     with get_db() as cur:
         (
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
 
     return render_template(
@@ -1220,9 +1296,12 @@ def packing_settings():
         packing_types=packing_types,
         pallet_types=pallet_types,
         packing_materials=packing_materials,
+        packing_profiles=packing_profiles,
         packing_items=packing_items,
-        packing_costs=packing_costs,
-        editing_packing_type=None,
+        profile_costs=profile_costs,
+        packing_profile_overrides=packing_profile_overrides,
+        products=products,
+        editing_packing_profile=None,
         editing_packing_item=None,
     )
 
@@ -1247,8 +1326,11 @@ def add_packing_type():
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -1257,9 +1339,12 @@ def add_packing_type():
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=None,
         )
 
@@ -1282,8 +1367,11 @@ def delete_packing_type(type_id):
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
         
     _bump_pricing_cache_version()
@@ -1294,9 +1382,12 @@ def delete_packing_type(type_id):
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=None,
         )
         
@@ -1307,18 +1398,15 @@ def delete_packing_type(type_id):
 
 @settings_bp.route("/settings/packing/items/add", methods=["POST"])
 def add_packing_item():
-    packing_type_id = int(request.form.get("packing_type_id") or 0)
-    pallet_type_id = int(request.form.get("pallet_type_id") or 0)
+    packing_profile_id = int(request.form.get("packing_profile_id") or 0)
     material_id = int(request.form.get("material_id") or 0)
     item_name = (request.form.get("item_name") or "").strip()
     quantity_per_pallet = (request.form.get("quantity_per_pallet") or "").strip()
 
     error = None
 
-    if packing_type_id <= 0:
-        error = "Please select packing type."
-    elif pallet_type_id <= 0:
-        error = "Please select pallet type."
+    if packing_profile_id <= 0:
+        error = "Please select packing profile."
     elif material_id <= 0:
         error = "Please select packing material."
     else:
@@ -1336,18 +1424,16 @@ def add_packing_item():
             cur.execute(
                 """
                 INSERT INTO packing_items (
-                    packing_type_id,
-                    pallet_type_id,
+                    packing_profile_id,
                     material_id,
                     item_name,
                     quantity_per_pallet
                 )
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (packing_type_id, pallet_type_id, material_id, item_name or None, qty_val),
+                (packing_profile_id, material_id, item_name or None, qty_val),
             )
         flash("Packing item added.", "success")
-        
         _bump_pricing_cache_version()
 
     with get_db() as cur:
@@ -1355,8 +1441,11 @@ def add_packing_item():
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -1365,9 +1454,12 @@ def add_packing_item():
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=None,
         )
 
@@ -1383,8 +1475,11 @@ def delete_packing_item(item_id):
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
         
     _bump_pricing_cache_version()
@@ -1395,9 +1490,12 @@ def delete_packing_item(item_id):
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=None,
         )
         
@@ -1413,16 +1511,18 @@ def edit_packing_item_load(item_id):
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
 
         cur.execute(
             """
             SELECT
                 pi.id,
-                pi.packing_type_id,
-                pi.pallet_type_id,
+                pi.packing_profile_id,
                 pi.material_id,
                 COALESCE(pi.item_name, ''),
                 pi.quantity_per_pallet
@@ -1442,9 +1542,12 @@ def edit_packing_item_load(item_id):
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=editing_packing_item,
         )
 
@@ -1453,18 +1556,15 @@ def edit_packing_item_load(item_id):
 
 @settings_bp.route("/settings/packing/items/<int:item_id>/update", methods=["POST"])
 def update_packing_item(item_id):
-    packing_type_id = int(request.form.get("packing_type_id") or 0)
-    pallet_type_id = int(request.form.get("pallet_type_id") or 0)
+    packing_profile_id = int(request.form.get("packing_profile_id") or 0)
     material_id = int(request.form.get("material_id") or 0)
     item_name = (request.form.get("item_name") or "").strip()
     quantity_per_pallet = (request.form.get("quantity_per_pallet") or "").strip()
 
     error = None
 
-    if packing_type_id <= 0:
-        error = "Please select packing type."
-    elif pallet_type_id <= 0:
-        error = "Please select pallet type."
+    if packing_profile_id <= 0:
+        error = "Please select packing profile."
     elif material_id <= 0:
         error = "Please select packing material."
     else:
@@ -1482,16 +1582,14 @@ def update_packing_item(item_id):
             cur.execute(
                 """
                 UPDATE packing_items
-                SET packing_type_id = %s,
-                    pallet_type_id  = %s,
-                    material_id     = %s,
-                    item_name       = %s,
-                    quantity_per_pallet = %s
+                SET packing_profile_id   = %s,
+                    material_id          = %s,
+                    item_name            = %s,
+                    quantity_per_pallet  = %s
                 WHERE id = %s
                 """,
                 (
-                    packing_type_id,
-                    pallet_type_id,
+                    packing_profile_id,
                     material_id,
                     item_name or None,
                     qty_val,
@@ -1499,7 +1597,6 @@ def update_packing_item(item_id):
                 ),
             )
         flash("Packing item updated.", "success")
-        
         _bump_pricing_cache_version()
 
     with get_db() as cur:
@@ -1507,8 +1604,11 @@ def update_packing_item(item_id):
             packing_types,
             pallet_types,
             packing_materials,
+            packing_profiles,
             packing_items,
-            packing_costs,
+            profile_costs,
+            packing_profile_overrides,
+            products,
         ) = _load_packing_context(cur)
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -1518,10 +1618,406 @@ def update_packing_item(item_id):
             packing_types=packing_types,
             pallet_types=pallet_types,
             packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
             packing_items=packing_items,
-            packing_costs=packing_costs,
-            editing_packing_type=None,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
             editing_packing_item=None,
         )
 
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/profiles/add", methods=["POST"])
+def add_packing_profile():
+    name = (request.form.get("profile_name") or "").strip()
+    packing_type_id = int(request.form.get("packing_type_id") or 0)
+    pallet_type_id = int(request.form.get("pallet_type_id") or 0)
+    is_global = bool(request.form.get("is_global"))
+
+    error = None
+    if not name:
+        error = "Profile name is required."
+    elif packing_type_id <= 0:
+        error = "Please select packing type."
+    elif pallet_type_id <= 0:
+        error = "Please select pallet type."
+
+    if error:
+        flash(error, "danger")
+    else:
+        with get_db() as cur:
+            cur.execute(
+                """
+                INSERT INTO packing_profiles (name, packing_type_id, pallet_type_id, is_global)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (name, packing_type_id, pallet_type_id, is_global),
+            )
+        flash("Packing profile added.", "success")
+        _bump_pricing_cache_version()
+
+    with get_db() as cur:
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "settings/packing.html",
+            packing_types=packing_types,
+            pallet_types=pallet_types,
+            packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
+            packing_items=packing_items,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
+            editing_packing_item=None,
+        )
+
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/profiles/<int:profile_id>/delete", methods=["POST"])
+def delete_packing_profile(profile_id):
+    with get_db() as cur:
+        # نحذف items المرتبطة بالبروفايل
+        cur.execute("DELETE FROM packing_items WHERE packing_profile_id = %s", (profile_id,))
+        # ثم البروفايل نفسه
+        cur.execute("DELETE FROM packing_profiles WHERE id = %s", (profile_id,))
+
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    _bump_pricing_cache_version()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "settings/packing.html",
+            packing_types=packing_types,
+            pallet_types=pallet_types,
+            packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
+            packing_items=packing_items,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
+            editing_packing_item=None,
+        )
+
+    flash("Packing profile deleted.", "success")
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/overrides/<int:override_id>/edit", methods=["POST"])
+def edit_packing_profile_override_load(override_id):
+    with get_db() as cur:
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+        cur.execute(
+            """
+            SELECT
+                o.id,
+                o.packing_profile_id,
+                o.product_id,
+                o.roll_weight_min,
+                o.roll_weight_max,
+                o.is_active
+            FROM packing_profile_overrides o
+            WHERE o.id = %s
+            """,
+            (override_id,),
+        )
+        editing_override = cur.fetchone()
+
+    if not editing_override:
+        flash("Override not found.", "danger")
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "settings/packing.html",
+            packing_types=packing_types,
+            pallet_types=pallet_types,
+            packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
+            packing_items=packing_items,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
+            editing_packing_item=None,
+            editing_override=editing_override,
+        )
+
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/overrides/<int:override_id>/update", methods=["POST"])
+def update_packing_profile_override(override_id):
+    product_id = int(request.form.get("product_id") or 0)
+    packing_profile_id = int(request.form.get("profile_id") or 0)
+    roll_weight_min = (request.form.get("roll_weight_min") or "").strip()
+    roll_weight_max = (request.form.get("roll_weight_max") or "").strip()
+    is_active = bool(request.form.get("is_active"))
+
+    print("OVERRIDE UPDATE FORM:", dict(request.form))
+
+    error = None
+
+    if product_id <= 0:
+        error = "Please select product."
+    elif packing_profile_id <= 0:
+        error = "Please select packing profile."
+    else:
+        try:
+            w_min = float(roll_weight_min)
+            w_max = float(roll_weight_max)
+            if w_min < 0 or w_max <= 0 or w_min > w_max:
+                raise ValueError()
+        except ValueError:
+            error = "Roll weight range is invalid."
+
+    if error:
+        flash(error, "danger")
+    else:
+        with get_db() as cur:
+            cur.execute(
+                """
+                UPDATE packing_profile_overrides
+                SET packing_profile_id = %s,
+                    product_id         = %s,
+                    roll_weight_min    = %s,
+                    roll_weight_max    = %s,
+                    is_active          = %s
+                WHERE id = %s
+                """,
+                (packing_profile_id, product_id, w_min, w_max, is_active, override_id),
+            )
+        flash("Packing profile override updated.", "success")
+        _bump_pricing_cache_version()
+
+    # إعادة تحميل الداتا
+    with get_db() as cur:
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    # لو الطلب جاي AJAX (من المودال) → رجّع tbody بس
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        filtered_overrides = [o for o in packing_profile_overrides if o[1] == packing_profile_id]
+        return render_template(
+            "settings/_packing_overrides_tbody.html",
+            packing_profile_overrides=filtered_overrides,
+        )
+
+    # غير كده → redirect عادي
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/overrides/<int:override_id>/delete", methods=["POST"])
+def delete_packing_profile_override(override_id):
+    # نجيب profile_id للأوفررايد قبل الحذف عشان نفلتر عليه بعد كده
+    profile_id = None
+    with get_db() as cur:
+        cur.execute(
+            "SELECT packing_profile_id FROM packing_profile_overrides WHERE id = %s",
+            (override_id,),
+        )
+        row = cur.fetchone()
+        if row:
+            profile_id = row[0]
+
+        cur.execute(
+            "DELETE FROM packing_profile_overrides WHERE id = %s",
+            (override_id,),
+        )
+
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    _bump_pricing_cache_version()
+
+    # لو الطلب جاي AJAX (من المودال) → رجّع tbody بس
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" and profile_id:
+        filtered_overrides = [o for o in packing_profile_overrides if o[1] == profile_id]
+        return render_template(
+            "settings/_packing_overrides_tbody.html",
+            packing_profile_overrides=filtered_overrides,
+        )
+
+    # غير كده → redirect عادي
+    flash("Packing profile override deleted.", "success")
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/settings/packing/profiles/<int:profile_id>/set-default", methods=["POST"])
+def set_packing_profile_default(profile_id):
+    with get_db() as cur:
+        # هات packing_type_id, pallet_type_id للبروفايل ده
+        cur.execute(
+            "SELECT packing_type_id, pallet_type_id FROM packing_profiles WHERE id = %s",
+            (profile_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            flash("Packing profile not found.", "danger")
+        else:
+            packing_type_id, pallet_type_id = row
+
+            # خلى كل البروفايلات لنفس النوع/البالتة مش global
+            cur.execute(
+                """
+                UPDATE packing_profiles
+                SET is_global = FALSE
+                WHERE packing_type_id = %s AND pallet_type_id = %s
+                """,
+                (packing_type_id, pallet_type_id),
+            )
+
+            # خلى ده هو الـ global
+            cur.execute(
+                """
+                UPDATE packing_profiles
+                SET is_global = TRUE
+                WHERE id = %s
+                """,
+                (profile_id,),
+            )
+
+            flash("Default packing profile updated.", "success")
+            _bump_pricing_cache_version()
+
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "settings/packing.html",
+            packing_types=packing_types,
+            pallet_types=pallet_types,
+            packing_materials=packing_materials,
+            packing_profiles=packing_profiles,
+            packing_items=packing_items,
+            profile_costs=profile_costs,
+            packing_profile_overrides=packing_profile_overrides,
+            products=products,
+            editing_packing_profile=None,
+            editing_packing_item=None,
+            editing_override=None,
+        )
+
+    return redirect(url_for("settings.packing_settings"))
+
+@settings_bp.route("/packing/profiles/<int:profile_id>/overrides/add", methods=["POST"])
+def add_profile_overrides(profile_id):
+    product_ids = request.form.getlist("product_id")  # multi-select
+    roll_weight_min = (request.form.get("roll_weight_min") or "").strip()
+    roll_weight_max = (request.form.get("roll_weight_max") or "").strip()
+    is_active = bool(request.form.get("is_active"))
+
+    error = None
+
+    if not product_ids:
+        error = "Please select at least one product."
+    else:
+        try:
+            w_min = float(roll_weight_min)
+            w_max = float(roll_weight_max)
+            if w_min < 0 or w_max <= 0 or w_min > w_max:
+                raise ValueError()
+        except ValueError:
+            error = "Roll weight range is invalid."
+
+    if error:
+        flash(error, "danger")
+    else:
+        with get_db() as cur:
+            for pid in product_ids:
+                pid_int = int(pid)
+                if pid_int <= 0:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO packing_profile_overrides (
+                        packing_profile_id,
+                        product_id,
+                        roll_weight_min,
+                        roll_weight_max,
+                        is_active
+                    )
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (profile_id, pid_int, w_min, w_max, is_active),
+                )
+        flash("Packing profile overrides added.", "success")
+        _bump_pricing_cache_version()
+
+    # إعادة تحميل الداتا
+    with get_db() as cur:
+        (
+            packing_types,
+            pallet_types,
+            packing_materials,
+            packing_profiles,
+            packing_items,
+            profile_costs,
+            packing_profile_overrides,
+            products,
+        ) = _load_packing_context(cur)
+
+    # لو جاي AJAX (من المودال) → رجّع tbody بس
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        filtered_overrides = [o for o in packing_profile_overrides if o[1] == profile_id]
+        return render_template(
+            "settings/_packing_overrides_tbody.html",
+            packing_profile_overrides=filtered_overrides,
+        )
+
+    # غير كده → redirect عادي
     return redirect(url_for("settings.packing_settings"))

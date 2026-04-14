@@ -1,0 +1,47 @@
+{# settings/_packing_overrides_tbody.html #}
+{% for o in packing_profile_overrides %}
+  {# o: 0-id,1-profile_id,2-profile_name,3-product_id,4-code,5-micron,6-film_type,7-stretchability_percent,8-min,9-max,10-is_active #}
+  <tr data-profile-id="{{ o[1] }}">
+    <td>{{ o[4] }}</td>
+    <td>{{ o[5] }}</td>
+    <td>{{ o[6] }}</td>
+    <td>{{ o[7] }}%</td>
+    <td class="text-end">{{ "%.3f"|format(o[8]) }}</td>
+    <td class="text-end">{{ "%.3f"|format(o[9]) }}</td>
+    <td class="text-center">
+      {% if o[10] %}
+        <span class="badge bg-success">Yes</span>
+      {% else %}
+        <span class="badge bg-secondary">No</span>
+      {% endif %}
+    </td>
+    <td class="text-center">
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary me-1"
+              data-override-id="{{ o[0] }}"
+              data-profile-id="{{ o[1] }}"
+              data-product-id="{{ o[3] }}"
+              data-min-w="{{ "%.3f"|format(o[7]) }}"
+              data-max-w="{{ "%.3f"|format(o[8]) }}"
+              data-is-active="{{ 1 if o[9] else 0 }}"
+              onclick="startEditOverride(this)">
+        Edit
+      </button>
+
+      <form method="post"
+            action="{{ url_for('settings.delete_packing_profile_override', override_id=o[0]) }}"
+            class="ajax-override-delete d-inline"
+            data-no-spinner="1">
+        <button type="submit"
+                class="btn btn-sm btn-outline-danger"
+                data-loading-label="Deleting...">
+          Delete
+        </button>
+      </form>
+    </td>
+  </tr>
+{% else %}
+  <tr>
+    <td colspan="7" class="text-center text-muted">No overrides for this profile.</td>
+  </tr>
+{% endfor %}

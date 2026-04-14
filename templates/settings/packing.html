@@ -8,7 +8,9 @@
   </div>
 
   <div class="row">
+    {# ========== LEFT COLUMN: Packing Types + Profiles ========== #}
     <div class="col-lg-4">
+      {# ----- Packing Types ----- #}
       <div class="card shadow mb-3">
         <div class="card-body">
           <h5 class="card-title mb-3">Packing Types</h5>
@@ -33,35 +35,140 @@
 
           <hr>
 
+          <p class="text-muted mb-1">
+            Packing types are general categories (e.g. Automatic / Manual) used in quotations.
+          </p>
+        </div>
+      </div>
+
+      {# ----- Packing Profiles ----- #}
+      <div class="card shadow mb-3">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Packing Profiles</h5>
+
+          <form method="post"
+                action="{{ url_for('settings.add_packing_profile') }}"
+                class="row g-2 ajax-partial"
+                data-update-target="packing-page-wrapper">
+            <div class="col-12">
+              <label class="form-label">Profile name</label>
+              <input type="text"
+                     name="profile_name"
+                     class="form-control"
+                     placeholder="e.g. Manual - Euro Pallet"
+                     required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Packing type</label>
+              <select name="packing_type_id" class="form-select" required>
+                <option value="">-- Select --</option>
+                {% for t in packing_types %}
+                {# t: 0-id,1-name,2-description #}
+                <option value="{{ t[0] }}">{{ t[1] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Pallet type</label>
+              <select name="pallet_type_id" class="form-select" required>
+                <option value="">-- Select --</option>
+                {% for plt in pallet_types %}
+                {# plt: 0-id,1-name,2-description #}
+                <option value="{{ plt[0] }}">{{ plt[1] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 form-check">
+              <input class="form-check-input" type="checkbox" name="is_global" id="is_global">
+              <label class="form-check-label" for="is_global">
+                Global profile (default for this packing & pallet type)
+              </label>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary btn-sm" data-loading-label="Saving...">
+                Add Profile
+              </button>
+            </div>
+          </form>
+
+          <hr>
+
           <div class="table-responsive">
             <table class="table table-sm table-striped mb-0 align-middle">
               <thead>
                 <tr>
+                  <th>Profile</th>
                   <th>Packing type</th>
                   <th>Pallet type</th>
                   <th class="text-end">Cost / pallet</th>
+                  <th class="text-center">Global</th>
+                  <th class="text-center">Active</th>
+                  <th class="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {% for t in packing_types %}
-                  {% for plt in pallet_types %}
-                    {% set key = (t[0], plt[0]) %}
-                    {% set cost_info = packing_costs.get(key) %}
-                    <tr>
-                      <td>{{ t[1] }}</td>
-                      <td>{{ plt[1] }}</td>
-                      <td class="text-end">
-                        {% if cost_info %}
-                          {{ "%.4f"|format(cost_info.total_cost_per_pallet) }}
-                        {% else %}
-                          0.0000
-                        {% endif %}
-                      </td>
-                    </tr>
-                  {% endfor %}
+                {% for p in packing_profiles %}
+                {# p: 0-id,1-name,2-packing_type_id,3-packing_type_name,4-pallet_type_id,5-pallet_type_name,6-is_global,7-is_active #}
+                {% set profile_id = p[0] %}
+                <tr>
+                  <td>{{ p[1] }}</td>
+                  <td>{{ p[3] }}</td>
+                  <td>{{ p[5] }}</td>
+                  <td class="text-end">
+                    {{ "%.4f"|format(profile_costs.get(profile_id, 0.0)) }}
+                  </td>
+                  <td class="text-center">
+                    {% if p[6] %}
+                      <span class="badge bg-success">Yes</span>
+                    {% else %}
+                      <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if p[7] %}
+                      <span class="badge bg-success">Yes</span>
+                    {% else %}
+                      <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <div class="d-flex justify-content-center">
+                      <form method="post"
+                            action="{{ url_for('settings.set_packing_profile_default', profile_id=p[0]) }}"
+                            class="ajax-partial me-1"
+                            data-update-target="packing-page-wrapper">
+                        <button type="submit"
+                                class="btn btn-sm {% if p[6] %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                                data-loading-label="Setting...">
+                          {% if p[6] %}Default{% else %}Set default{% endif %}
+                        </button>
+                      </form>
+
+                      <button type="button"
+                              class="btn btn-sm btn-outline-primary me-1"
+                              data-bs-toggle="modal"
+                              data-bs-target="#profileOverridesModal"
+                              data-profile-id="{{ p[0] }}">
+                        Customize
+                      </button>
+
+                      <form method="post"
+                            action="{{ url_for('settings.delete_packing_profile', profile_id=p[0]) }}"
+                            class="ajax-partial"
+                            data-update-target="packing-page-wrapper"
+                            data-confirm="Delete this packing profile and its items?">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-danger"
+                                data-loading-label="Deleting...">
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
                 {% else %}
                 <tr>
-                  <td colspan="3" class="text-center text-muted">No packing types defined.</td>
+                  <td colspan="7" class="text-center text-muted">No packing profiles defined.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -69,22 +176,25 @@
           </div>
 
           <small class="text-muted d-block mt-2">
-            * Cost / pallet = sum of (Qty per pallet × price_per_unit) for all items in this packing type & pallet type.
+            * Cost / pallet = sum of (Qty per pallet × price_per_unit) for all items in this profile.
           </small>
         </div>
       </div>
     </div>
 
+    {# ========== RIGHT COLUMN: Items ========== #}
     <div class="col-lg-8">
+      {# ----- Packing Items Form ----- #}
       <div class="card shadow mb-3">
         <div class="card-body">
           <h5 class="card-title mb-3">
             {% if editing_packing_item %}
               Edit Packing Item
             {% else %}
-              Add Packing Item per Pallet
+              Add Packing Item to Profile
             {% endif %}
           </h5>
+
           <form method="post"
                 action="{% if editing_packing_item %}
                            {{ url_for('settings.update_packing_item', item_id=editing_packing_item[0]) }}
@@ -93,62 +203,57 @@
                          {% endif %}"
                 class="row g-3 ajax-partial"
                 data-update-target="packing-page-wrapper">
-            <div class="col-md-3">
-              <label class="form-label">Packing type</label>
-              <select name="packing_type_id" class="form-select" required>
+
+            <div class="col-md-4">
+              <label class="form-label">Packing profile</label>
+              <select name="packing_profile_id" class="form-select" required>
                 <option value="">-- Select --</option>
-                {% for t in packing_types %}
-                <option value="{{ t[0] }}"
-                        {% if editing_packing_item and editing_packing_item[1] == t[0] %}selected{% endif %}>
-                  {{ t[1] }}
+                {% for pp in packing_profiles %}
+                {# pp: 0-id,1-name,2-packing_type_id,3-packing_type_name,4-pallet_type_id,5-pallet_type_name,6-is_global,7-is_active #}
+                <option value="{{ pp[0] }}"
+                        {% if editing_packing_item and editing_packing_item[1] == pp[0] %}selected{% endif %}>
+                  {{ pp[1] }} ({{ pp[3] }} / {{ pp[5] }}){% if pp[6] %} [Global]{% endif %}
                 </option>
                 {% endfor %}
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Pallet type</label>
-              <select name="pallet_type_id" class="form-select" required>
-                <option value="">-- Select --</option>
-                {% for plt in pallet_types %}
-                <option value="{{ plt[0] }}"
-                        {% if editing_packing_item and editing_packing_item[2] == plt[0] %}selected{% endif %}>
-                  {{ plt[1] }}
-                </option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-3">
+
+            <div class="col-md-4">
               <label class="form-label">Material (PACKING)</label>
               <select name="material_id" class="form-select" required>
                 <option value="">-- Select --</option>
                 {% for m in packing_materials %}
+                {# m: 0-id,1-code,2-name,3-unit,4-price #}
                 <option value="{{ m[0] }}"
-                        {% if editing_packing_item and editing_packing_item[3] == m[0] %}selected{% endif %}>
+                        {% if editing_packing_item and editing_packing_item[2] == m[0] %}selected{% endif %}>
                   {{ m[1] }} - {{ m[2] }} ({{ m[3] }})
                 </option>
                 {% endfor %}
               </select>
             </div>
-            <div class="col-md-3">
+
+            <div class="col-md-4">
               <label class="form-label">Qty per pallet</label>
               <input type="number"
                      step="0.001"
                      name="quantity_per_pallet"
                      class="form-control"
-                     value="{{ editing_packing_item[5] if editing_packing_item else '' }}"
+                     value="{{ editing_packing_item[4] if editing_packing_item else '' }}"
                      required>
             </div>
+
             <div class="col-md-12">
               <label class="form-label">Display name</label>
               <input type="text"
                      name="item_name"
                      class="form-control"
                      placeholder="Optional"
-                     value="{{ editing_packing_item[4] if editing_packing_item else '' }}">
+                     value="{{ editing_packing_item[3] if editing_packing_item else '' }}">
             </div>
+
             <div class="col-12 d-flex justify-content-end">
               <button type="submit" class="btn btn-primary me-2"
-                      data-loading-label="{% if editing_packing_item %}Saving...{% else %}Saving...{% endif %}">
+                      data-loading-label="Saving...">
                 {% if editing_packing_item %}Save Changes{% else %}Add Item{% endif %}
               </button>
               {% if editing_packing_item %}
@@ -163,13 +268,15 @@
         </div>
       </div>
 
-      <div class="card shadow">
+      {# ----- Packing Items Table ----- #}
+      <div class="card shadow mb-3">
         <div class="card-body">
-          <h5 class="card-title mb-3">Packing Items per Pallet</h5>
+          <h5 class="card-title mb-3">Packing Items per Profile</h5>
           <div class="table-responsive">
             <table class="table table-sm table-striped align-middle mb-0">
               <thead>
                 <tr>
+                  <th>Profile</th>
                   <th>Packing type</th>
                   <th>Pallet type</th>
                   <th>Material</th>
@@ -181,25 +288,24 @@
               </thead>
               <tbody>
                 {% for p in packing_items %}
-                {# p: 0-id,1-packing_type_id,2-packing_type_name,3-pallet_type_id,4-pallet_type_name,
-                       5-material_id,6-item_name,7-material_code,8-unit,9-qty,10-price #}
+                {# p: 0-id,1-packing_profile_id,2-profile_name,3-packing_type_id,4-packing_type_name,5-pallet_type_id,6-pallet_type_name,
+                      7-material_id,8-item_name,9-material_code,10-unit,11-qty,12-price #}
                 <tr>
                   <td>{{ p[2] }}</td>
-                  <td>{{ p[4] or '-' }}</td>
-                  <td>
-                    {{ p[7] }} - {{ p[6] }} ({{ p[8] }})
-                  </td>
-                  <td class="text-end">{{ "%.3f"|format(p[9]) }}</td>
+                  <td>{{ p[4] }}</td>
+                  <td>{{ p[6] }}</td>
+                  <td>{{ p[9] }} - {{ p[8] }} ({{ p[10] }})</td>
+                  <td class="text-end">{{ "%.3f"|format(p[11]) }}</td>
                   <td class="text-end">
-                    {% if p[10] is not none %}
-                      {{ "%.4f"|format(p[10]) }}
+                    {% if p[12] is not none %}
+                      {{ "%.4f"|format(p[12]) }}
                     {% else %}
                       -
                     {% endif %}
                   </td>
                   <td class="text-end">
-                    {% if p[10] is not none %}
-                      {{ "%.4f"|format(p[9] * p[10]) }}
+                    {% if p[12] is not none %}
+                      {{ "%.4f"|format(p[11] * p[12]) }}
                     {% else %}
                       -
                     {% endif %}
@@ -233,7 +339,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                  <td colspan="7" class="text-center text-muted">No packing items defined.</td>
+                  <td colspan="8" class="text-center text-muted">No packing items defined.</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -247,4 +353,277 @@
     </div>
   </div>
 </div>
+{# ===== Modal: Customize products per profile ===== #}
+<div class="modal fade" id="profileOverridesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Customize packing profile for products</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post"
+              action=""
+              class="row g-3"
+              id="profile-overrides-form"
+              data-no-spinner="1">
+        <input type="hidden" name="profile_id" id="override_profile_id">
+
+          <div class="col-md-6">
+            <label class="form-label">Products</label>
+            <select name="product_id"
+                    id="override_product_ids"
+                    class="form-select"
+                    multiple
+                    required>
+              {% for p in products %}
+              {# p: 0-id,1-code,2-micron,3-film_type,4-stretchability_percent #}
+              <option value="{{ p[0] }}">
+                {{ p[1] }} - {{ p[2] }}µ - {{ p[3] }} - {{ p[4] }}%
+              </option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Hold Ctrl/Command to select multiple products.</small>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Roll weight min (kg)</label>
+            <input type="number"
+                   step="0.001"
+                   name="roll_weight_min"
+                   class="form-control"
+                   required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Roll weight max (kg)</label>
+            <input type="number"
+                   step="0.001"
+                   name="roll_weight_max"
+                   class="form-control"
+                   required>
+          </div>
+
+          <div class="col-md-3 d-flex align-items-center">
+            <div class="form-check mt-4">
+              <input class="form-check-input"
+                     type="checkbox"
+                     name="is_active"
+                     id="override_is_active_modal"
+                     checked>
+              <label class="form-check-label" for="override_is_active_modal">
+                Active
+              </label>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex justify-content-end">
+            <button type="submit"
+                    class="btn btn-primary"
+                    data-loading-label="Saving...">
+              Add overrides
+            </button>
+          </div>
+        </form>
+
+        <hr>
+
+        <h6>Existing overrides for this profile</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Micron</th>
+                <th>Film type</th>
+                <th>Stretch %</th>
+                <th class="text-end">Roll weight min</th>
+                <th class="text-end">Roll weight max</th>
+                <th class="text-center">Active</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+              <tbody id="profile-overrides-table-body">
+                {% include "settings/_packing_overrides_tbody.html" %}
+              </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const addOverrideUrlTemplate = "{{ url_for('settings.add_profile_overrides', profile_id=0) }}";
+  const updateOverrideUrlTemplate = "{{ url_for('settings.update_packing_profile_override', override_id=0) }}";
+</script>
+
+<script>
+  const modalEl = document.getElementById('profileOverridesModal');
+
+  modalEl.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const profileId = button.getAttribute('data-profile-id');
+
+    const form = document.getElementById('profile-overrides-form');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const productsSelect = document.getElementById('override_product_ids');
+
+    // وضع ADD
+    form.dataset.mode = 'add';
+    form.dataset.editOverrideId = '';
+    form.action = addOverrideUrlTemplate.replace('/0/', `/${profileId}/`);
+    document.getElementById('override_profile_id').value = profileId;
+    submitBtn.textContent = 'Add overrides';
+
+    // تصفير الفورم
+    form.querySelector('input[name="roll_weight_min"]').value = '';
+    form.querySelector('input[name="roll_weight_max"]').value = '';
+    form.querySelector('#override_is_active_modal').checked = true;
+    if (productsSelect) {
+      for (const opt of productsSelect.options) {
+        opt.selected = false;
+      }
+    }
+
+    // فلترة جدول الأوفررايدز للبروفايل الحالي
+    const tbody = document.getElementById('profile-overrides-table-body');
+    const allRows = Array.from(tbody.querySelectorAll('tr[data-profile-id]'));
+
+    let hasRows = false;
+    allRows.forEach(tr => {
+      const rowProfileId = tr.getAttribute('data-profile-id');
+      if (String(rowProfileId) === String(profileId)) {
+        tr.style.display = '';
+        hasRows = true;
+      } else {
+        tr.style.display = 'none';
+      }
+    });
+
+    if (!hasRows) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No overrides for this profile.</td></tr>';
+    }
+  });
+
+  function startEditOverride(buttonEl) {
+    const overrideId = buttonEl.getAttribute('data-override-id');
+    const profileId = buttonEl.getAttribute('data-profile-id');
+    const productId = buttonEl.getAttribute('data-product-id');
+    const minW = buttonEl.getAttribute('data-min-w');
+    const maxW = buttonEl.getAttribute('data-max-w');
+    const isActive = buttonEl.getAttribute('data-is-active') === '1';
+
+    const form = document.getElementById('profile-overrides-form');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const productsSelect = document.getElementById('override_product_ids');
+
+    // وضع EDIT
+    form.dataset.mode = 'edit';
+    form.dataset.editOverrideId = overrideId;
+    form.action = updateOverrideUrlTemplate.replace('/0/', `/${overrideId}/`);
+    document.getElementById('override_profile_id').value = profileId;
+    submitBtn.textContent = 'Save override';
+
+    if (productsSelect) {
+      for (const opt of productsSelect.options) {
+        opt.selected = (String(opt.value) === String(productId));
+      }
+    }
+
+    form.querySelector('input[name="roll_weight_min"]').value = minW;
+    form.querySelector('input[name="roll_weight_max"]').value = maxW;
+    form.querySelector('#override_is_active_modal').checked = isActive;
+  }
+</script>
+<script>
+  const overridesTbody = document.getElementById('profile-overrides-table-body');
+  const overridesForm = document.getElementById('profile-overrides-form');
+
+  async function reloadOverridesTbody(url, formData) {
+    const fetchUrl = url.includes('?') ? url + '&overrides_only=1' : url + '?overrides_only=1';
+
+    const resp = await fetch(fetchUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Skip-Global-Spinner': '1'   // ← ده الجديد
+      }
+    });
+
+    const html = await resp.text();
+    overridesTbody.innerHTML = html;
+  }
+
+  // سبينر زرار ADD / SAVE في المودال
+  if (overridesForm) {
+    overridesForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(overridesForm);
+      const action = overridesForm.action;
+
+      const submitBtn = overridesForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn ? submitBtn.textContent : null;
+      const loadingLabel = submitBtn?.getAttribute('data-loading-label') || 'Saving...';
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = loadingLabel;
+      }
+
+      try {
+        await reloadOverridesTbody(action, formData);
+      } catch (err) {
+        console.error('Failed to reload overrides tbody', err);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
+      }
+    });
+  }
+
+  // سبينر زرار DELETE في جدول الأوفررايدز
+  if (overridesTbody) {
+    overridesTbody.addEventListener('submit', async function (e) {
+      const form = e.target;
+      if (!form.classList.contains('ajax-override-delete')) return;
+
+      e.preventDefault();
+
+      const confirmMsg = form.getAttribute('data-confirm');
+      if (confirmMsg && !confirm(confirmMsg)) return;
+
+      const formData = new FormData(form);
+      const action = form.action;
+
+      const btn = form.querySelector('button[type="submit"]');
+      const originalText = btn ? btn.textContent : null;
+      const loadingLabel = btn?.getAttribute('data-loading-label') || 'Deleting...';
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = loadingLabel;
+      }
+
+      try {
+        await reloadOverridesTbody(action, formData);
+      } catch (err) {
+        console.error('Failed to delete override', err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    });
+  }
+</script>
 {% endblock %}
