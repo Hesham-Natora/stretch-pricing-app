@@ -21,9 +21,9 @@
               data-override-id="{{ o[0] }}"
               data-profile-id="{{ o[1] }}"
               data-product-id="{{ o[3] }}"
-              data-min-w="{{ "%.3f"|format(o[7]) }}"
-              data-max-w="{{ "%.3f"|format(o[8]) }}"
-              data-is-active="{{ 1 if o[9] else 0 }}"
+              data-min-w="{{ "%.3f"|format(o[8]) }}"
+              data-max-w="{{ "%.3f"|format(o[9]) }}"
+              data-is-active="{{ 1 if o[10] else 0 }}"
               onclick="startEditOverride(this)">
         Edit
       </button>
@@ -42,6 +42,6 @@
   </tr>
 {% else %}
   <tr>
-    <td colspan="7" class="text-center text-muted">No overrides for this profile.</td>
+    <td colspan="8" class="text-center text-muted">No overrides for this profile.</td>
   </tr>
 {% endfor %}
