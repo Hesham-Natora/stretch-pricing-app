@@ -255,8 +255,10 @@ def calculate_line_price_bulk(
         # تعديل OH حسب الـ width لو أقل من 500mm
         if width_mm and width_mm < 500:
             factor = 500.0 / width_mm
+            energy_cost_per_kg *= factor
             machine_oh_per_kg *= factor
 
+        energy_cost_per_kg = round_3(energy_cost_per_kg)
         machine_oh_per_kg = round_3(machine_oh_per_kg)  # الأساس يبقى 3 أرقام
 
     total_cost_per_kg += energy_cost_per_kg + machine_oh_per_kg
