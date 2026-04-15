@@ -132,24 +132,20 @@ CREATE TABLE IF NOT EXISTS pallet_types (
 -- تعريف الباكنج الفعلي للبالتة: مادة PACKING + كميتها على البالتة
 CREATE TABLE IF NOT EXISTS packing_items (
     id SERIAL PRIMARY KEY,
-    packing_type_id INTEGER REFERENCES packing_types(id),
     material_id INTEGER REFERENCES materials(id),              -- المادة من جدول materials (CATEGORY = PACKING)
     item_name VARCHAR(100),                                    -- اختياري لو حابب اسم مخصص
     quantity_per_pallet DECIMAL(8,3) NOT NULL                  -- كام وحدة من المادة على البالتة
     -- السعر لا يُخزن هنا، بيُقرأ من materials.price_per_unit
 );
 
-ALTER TABLE packing_items
-    ADD COLUMN IF NOT EXISTS pallet_type_id INTEGER REFERENCES pallet_types(id);
-
 -- NEW: Packing profiles (global + product-specific)
 CREATE TABLE IF NOT EXISTS packing_profiles (
-    id              SERIAL PRIMARY KEY,
-    name            VARCHAR(100) NOT NULL,
-    packing_type_id INTEGER NOT NULL REFERENCES packing_types(id),
-    pallet_type_id  INTEGER NOT NULL REFERENCES pallet_types(id),
-    is_global       BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE = عام لكل المنتجات
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE
+    id               SERIAL PRIMARY KEY,
+    name             VARCHAR(100) NOT NULL,
+    packing_type_id  INTEGER NOT NULL REFERENCES packing_types(id),
+    pallet_type_id   INTEGER NOT NULL REFERENCES pallet_types(id),
+    is_global        BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE = عام لكل المنتجات
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 -- ربط packing_items بالبروفايل (بدل ما تكون عامة فقط)

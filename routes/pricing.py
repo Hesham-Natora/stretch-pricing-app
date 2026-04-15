@@ -2786,14 +2786,15 @@ def quotation_cost(quotation_id: int):
         cur.execute(
             """
             SELECT
-                pi.packing_type_id,
-                pi.pallet_type_id,
+                pp.packing_type_id,
+                pp.pallet_type_id,
                 pi.material_id,
                 pi.quantity_per_pallet,
                 m.price_per_unit,
                 m.currency
             FROM packing_items pi
-            JOIN materials m ON m.id = pi.material_id
+            JOIN packing_profiles pp ON pp.id = pi.packing_profile_id
+            JOIN materials m        ON m.id = pi.material_id
             """
         )
         packing_rows = cur.fetchall()
@@ -2806,6 +2807,10 @@ def quotation_cost(quotation_id: int):
             price_per_unit,
             currency,
         ) in packing_rows:
+            # حماية احتياطية، بس نظريًا مش محتاجها لأن packing_profiles.* NOT NULL
+            if packing_type_id is None or pallet_type_id is None:
+                continue
+
             qty = float(qty_per_pallet or 0)
             price = float(price_per_unit or 0)
             curr = (currency or "USD").upper()

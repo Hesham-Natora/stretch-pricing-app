@@ -1384,7 +1384,27 @@ def add_packing_type():
 @settings_bp.route("/settings/packing/types/<int:type_id>/delete", methods=["POST"])
 def delete_packing_type(type_id):
     with get_db() as cur:
-        cur.execute("DELETE FROM packing_items WHERE packing_type_id = %s", (type_id,))
+        # أولاً نحذف كل الـ profiles لهذا الـ packing_type
+        cur.execute(
+            "SELECT id FROM packing_profiles WHERE packing_type_id = %s",
+            (type_id,),
+        )
+        rows_profiles = cur.fetchall()
+        profile_ids = [r[0] for r in rows_profiles] if rows_profiles else []
+
+        if profile_ids:
+            # نحذف items المرتبطة بهذه الـ profiles
+            cur.execute(
+                "DELETE FROM packing_items WHERE packing_profile_id = ANY(%s)",
+                (profile_ids,),
+            )
+            # نحذف الـ profiles نفسها
+            cur.execute(
+                "DELETE FROM packing_profiles WHERE id = ANY(%s)",
+                (profile_ids,),
+            )
+
+        # أخيرًا نحذف الـ packing_type نفسه
         cur.execute("DELETE FROM packing_types WHERE id = %s", (type_id,))
 
         (
@@ -1397,7 +1417,7 @@ def delete_packing_type(type_id):
             packing_profile_overrides,
             products,
         ) = _load_packing_context(cur)
-        
+
     _bump_pricing_cache_version()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -1414,7 +1434,6 @@ def delete_packing_type(type_id):
             editing_packing_profile=None,
             editing_packing_item=None,
         )
-        
 
     flash("Packing type deleted.", "success")
     return redirect(url_for("settings.packing_settings"))
