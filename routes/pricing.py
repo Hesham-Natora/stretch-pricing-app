@@ -266,12 +266,6 @@ def calculate_line_price_bulk(
     rm_cost_per_kg = total_cost_per_kg - energy_cost_per_kg - machine_oh_per_kg
     # برضه بدون round_3 هنا
 
-    total_cost_per_kg += energy_cost_per_kg + machine_oh_per_kg
-
-    # RM منفصلة (بدون core/packing/extras)
-    rm_cost_per_kg = total_cost_per_kg - energy_cost_per_kg - machine_oh_per_kg
-    rm_cost_per_kg = round_3(rm_cost_per_kg)  # الأساس يبقى 3 أرقام
-
     # ===== 3) Core + Packing cost =====
     core_cost_per_unit = 0.0
     core_cost_per_kg = 0.0
