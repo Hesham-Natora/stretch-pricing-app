@@ -229,8 +229,8 @@ def calculate_line_price_bulk(
 
         actual_capacity_kg = monthly_capacity_kg * utilization_rate
 
-        # Energy cost /kg
-        energy_cost_per_kg = round_3(kwh_per_kg * energy_rate)
+        # Energy cost /kg (بدون تقريب داخلي)
+        energy_cost_per_kg = kwh_per_kg * energy_rate
 
         # machine costs
         cost_rows = machine_costs_map.get(machine_id, [])
@@ -252,14 +252,19 @@ def calculate_line_price_bulk(
 
         machine_oh_per_kg = fixed_per_kg_usd + variable_per_kg_usd
 
-        # تعديل OH حسب الـ width لو أقل من 500mm
+        # تعديل Energy + Machine OH حسب الـ width لو أقل من 500mm
         if width_mm and width_mm < 500:
             factor = 500.0 / width_mm
             energy_cost_per_kg *= factor
             machine_oh_per_kg *= factor
 
-        energy_cost_per_kg = round_3(energy_cost_per_kg)
-        machine_oh_per_kg = round_3(machine_oh_per_kg)  # الأساس يبقى 3 أرقام
+        # مفيش أي round هنا
+
+    total_cost_per_kg += energy_cost_per_kg + machine_oh_per_kg
+
+    # RM منفصلة (بدون core/packing/extras)
+    rm_cost_per_kg = total_cost_per_kg - energy_cost_per_kg - machine_oh_per_kg
+    # برضه بدون round_3 هنا
 
     total_cost_per_kg += energy_cost_per_kg + machine_oh_per_kg
 
