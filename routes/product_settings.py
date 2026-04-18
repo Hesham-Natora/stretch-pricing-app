@@ -175,6 +175,27 @@ def index(product_id):
         total_cost_per_kg,
     ) = _load_bom_tab(product_id, product, roll_bom_id=roll_bom_id)
 
+    # هنا الإضافة الجديدة
+    with get_db() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                product_id,
+                gross_kg_per_roll,
+                core_kg_per_roll,
+                rolls_per_pallet,
+                packing_profile_id,
+                pricing_rule_id,
+                is_active,
+                COALESCE(notes, '')
+            FROM product_semis
+            WHERE product_id = %s
+            """,
+            (product_id,),
+        )
+        product_semi = cur.fetchone()
+
     return render_template(
         "product_settings/index.html",
         product=product,
@@ -188,7 +209,9 @@ def index(product_id):
         total_cost=total_cost,
         bom_scrap_percent=bom_scrap_percent,
         total_cost_per_kg=total_cost_per_kg,
-        show_bom_only=show_bom_only,  # جديد
+        show_bom_only=show_bom_only,
+        # نمرّر المتغير الجديد للتمبليت
+        product_semi=product_semi,
     )
 
 
