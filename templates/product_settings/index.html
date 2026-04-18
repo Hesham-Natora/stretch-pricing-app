@@ -406,6 +406,7 @@
                   {# indices: 0:id,1:micron_min,2:micron_max,3:film_type,4:packing_type_id,5:w_min,6:w_max,7:margin #}
                   <option value="{{ pr[0] }}"
                           {% if product_semi and product_semi[6] == pr[0] %}selected{% endif %}>
+                    {{ pr[3] }} /
                     {{ pr[1] }}–{{ pr[2] }} µm /
                     {{ pr[5] }}–{{ pr[6] }} kg /
                     margin {{ "%.2f"|format(pr[7]) }}%

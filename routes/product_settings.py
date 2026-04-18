@@ -228,8 +228,7 @@ def index(product_id):
                 roll_weight_max,
                 margin_percent
             FROM pricing_rules
-            WHERE film_type = 'prestretch'
-            ORDER BY micron_min, roll_weight_min, id
+            ORDER BY film_type, micron_min, roll_weight_min, id
             """
         )
         pricing_rules_for_semi = cur.fetchall()
