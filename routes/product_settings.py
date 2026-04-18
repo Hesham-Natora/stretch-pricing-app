@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from db import get_db
 from services.costing import get_material_landed_price_per_kg
 from .settings import _bump_pricing_cache_version
+from flask_login import current_user
 
 product_settings_bp = Blueprint(
     "product_settings", __name__, template_folder="../templates/product_settings"
@@ -625,3 +626,116 @@ def bom_delete(product_id, item_id):
             "items": items_json,
         }
     )
+    
+@product_settings_bp.route("/product/<int:product_id>/settings/semi/save", methods=["POST"])
+def semi_save(product_id):
+    # نسمح فقط للـ admin و owner
+    if current_user.role not in ("admin", "owner"):
+        flash("You are not allowed to edit semi settings.", "danger")
+        return redirect(url_for("product_settings.index", product_id=product_id))
+
+    gross_kg_per_roll = (request.form.get("gross_kg_per_roll") or "").strip()
+    core_kg_per_roll  = (request.form.get("core_kg_per_roll") or "").strip()
+    rolls_per_pallet  = (request.form.get("rolls_per_pallet") or "").strip()
+    packing_profile_id = int(request.form.get("packing_profile_id") or 0)
+    pricing_rule_id    = int(request.form.get("pricing_rule_id") or 0)
+    is_active          = bool(request.form.get("is_active"))
+    notes              = (request.form.get("notes") or "").strip()
+
+    error = None
+
+    # فاليديشن للأوزان
+    try:
+        gross_val = float(gross_kg_per_roll)
+        core_val  = float(core_kg_per_roll)
+        if gross_val <= 0 or core_val < 0 or core_val >= gross_val:
+            raise ValueError()
+    except ValueError:
+        error = "Invalid gross/core roll weights."
+
+    # فاليديشن لعدد الرولات
+    if not error:
+        try:
+            rolls_val = int(rolls_per_pallet)
+            if rolls_val <= 0:
+                raise ValueError()
+        except ValueError:
+            error = "Rolls per pallet must be a positive integer."
+
+    # اختيار البروفايل
+    if not error and packing_profile_id <= 0:
+        error = "Please select packing profile."
+
+    # اختيار قاعدة المارجن
+    if not error and pricing_rule_id <= 0:
+        error = "Please select pricing rule (margin)."
+
+    if error:
+        flash(error, "danger")
+        return redirect(url_for("product_settings.index", product_id=product_id))
+
+    with get_db() as cur:
+        # هل يوجد سيمي مسبقًا؟
+        cur.execute(
+            "SELECT id FROM product_semis WHERE product_id = %s",
+            (product_id,),
+        )
+        row = cur.fetchone()
+
+        if row:
+            # تحديث
+            cur.execute(
+                """
+                UPDATE product_semis
+                SET gross_kg_per_roll = %s,
+                    core_kg_per_roll  = %s,
+                    rolls_per_pallet  = %s,
+                    packing_profile_id = %s,
+                    pricing_rule_id    = %s,
+                    is_active          = %s,
+                    notes              = %s
+                WHERE product_id = %s
+                """,
+                (
+                    gross_val,
+                    core_val,
+                    rolls_val,
+                    packing_profile_id,
+                    pricing_rule_id,
+                    is_active,
+                    notes or None,
+                    product_id,
+                ),
+            )
+        else:
+            # إدراج جديد
+            cur.execute(
+                """
+                INSERT INTO product_semis (
+                    product_id,
+                    gross_kg_per_roll,
+                    core_kg_per_roll,
+                    rolls_per_pallet,
+                    packing_profile_id,
+                    pricing_rule_id,
+                    is_active,
+                    notes
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    product_id,
+                    gross_val,
+                    core_val,
+                    rolls_val,
+                    packing_profile_id,
+                    pricing_rule_id,
+                    is_active,
+                    notes or None,
+                ),
+            )
+
+    _bump_pricing_cache_version()
+
+    flash("Semi settings saved.", "success")
+    return redirect(url_for("product_settings.index", product_id=product_id))
