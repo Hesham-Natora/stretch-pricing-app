@@ -175,8 +175,9 @@ def index(product_id):
         total_cost_per_kg,
     ) = _load_bom_tab(product_id, product, roll_bom_id=roll_bom_id)
 
-    # هنا الإضافة الجديدة
+    # تحميل بيانات السيمي + البروفايلات + الرولز
     with get_db() as cur:
+        # 1) سجل السيمي (لو موجود)
         cur.execute(
             """
             SELECT
@@ -196,6 +197,42 @@ def index(product_id):
         )
         product_semi = cur.fetchone()
 
+        # 2) كل البروفايلات الفعالة للباكنج
+        cur.execute(
+            """
+            SELECT
+                id,
+                name,
+                packing_type_id,
+                pallet_type_id,
+                is_global,
+                is_active
+            FROM packing_profiles
+            WHERE is_active = TRUE
+            ORDER BY name
+            """
+        )
+        packing_profiles_for_semi = cur.fetchall()
+
+        # 3) كل الـ pricing_rules للفيلم type = 'prestretch'
+        cur.execute(
+            """
+            SELECT
+                id,
+                micron_min,
+                micron_max,
+                film_type,
+                packing_type_id,
+                roll_weight_min,
+                roll_weight_max,
+                margin_percent
+            FROM pricing_rules
+            WHERE film_type = 'prestretch'
+            ORDER BY micron_min, roll_weight_min, id
+            """
+        )
+        pricing_rules_for_semi = cur.fetchall()
+
     return render_template(
         "product_settings/index.html",
         product=product,
@@ -210,8 +247,9 @@ def index(product_id):
         bom_scrap_percent=bom_scrap_percent,
         total_cost_per_kg=total_cost_per_kg,
         show_bom_only=show_bom_only,
-        # نمرّر المتغير الجديد للتمبليت
         product_semi=product_semi,
+        packing_profiles_for_semi=packing_profiles_for_semi,
+        pricing_rules_for_semi=pricing_rules_for_semi,
     )
 
 
