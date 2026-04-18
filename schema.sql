@@ -381,3 +381,18 @@ CREATE TABLE IF NOT EXISTS product_roll_bom_items (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (roll_bom_id, material_id)
 );
+
+CREATE TABLE product_semis (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL UNIQUE
+        REFERENCES products(id) ON DELETE CASCADE,
+    gross_kg_per_roll NUMERIC(10, 4) NOT NULL,
+    core_kg_per_roll  NUMERIC(10, 4) NOT NULL,
+    rolls_per_pallet  INTEGER NOT NULL,
+    packing_profile_id INTEGER NOT NULL
+        REFERENCES packing_profiles(id) ON DELETE RESTRICT,
+    pricing_rule_id INTEGER NOT NULL
+        REFERENCES pricing_rules(id) ON DELETE RESTRICT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    notes TEXT
+);
