@@ -33,6 +33,7 @@
     </button>
   </li>
   {% endif %}
+
   <li class="nav-item" role="presentation">
     <button class="nav-link {% if show_bom_only %}active{% endif %}" id="bom-tab"
             data-bs-toggle="tab" data-bs-target="#bom-pane"
@@ -40,6 +41,17 @@
       BOM
     </button>
   </li>
+
+  {# تاب السيمي: يظهر للـ admin + owner فقط #}
+  {% if current_user.role in ['admin', 'owner'] %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="semi-tab"
+            data-bs-toggle="tab" data-bs-target="#semi-pane"
+            type="button" role="tab" aria-controls="semi-pane" aria-selected="false">
+      Semi
+    </button>
+  </li>
+  {% endif %}
 </ul>
 
 <div class="tab-content" id="productSettingsTabsContent">
@@ -321,6 +333,117 @@
       </div>
     </div> <!-- /row -->
   </div> <!-- /bom-pane -->
+  {# Semi tab - فقط للـ admin / owner #}
+  {% if current_user.role in ['admin', 'owner'] %}
+  <div class="tab-pane fade" id="semi-pane"
+       role="tabpanel" aria-labelledby="semi-tab">
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header py-2">
+        <strong>Semi settings (pre-stretch)</strong>
+      </div>
+      <div class="card-body small">
+        <form method="post"
+              action="{{ url_for('product_settings.semi_save', product_id=product[0]) }}">
+          {# لو عندك CSRF token حطه هنا #}
+
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Gross kg per roll</label>
+              <input type="number"
+                     name="gross_kg_per_roll"
+                     class="form-control form-control-sm"
+                     step="0.0001" min="0"
+                     value="{% if product_semi %}{{ product_semi[2] }}{% endif %}"
+                     required>
+            </div>
+
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Core kg per roll</label>
+              <input type="number"
+                     name="core_kg_per_roll"
+                     class="form-control form-control-sm"
+                     step="0.0001" min="0"
+                     value="{% if product_semi %}{{ product_semi[3] }}{% endif %}"
+                     required>
+            </div>
+
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Rolls per pallet</label>
+              <input type="number"
+                     name="rolls_per_pallet"
+                     class="form-control form-control-sm"
+                     step="1" min="1"
+                     value="{% if product_semi %}{{ product_semi[4] }}{% endif %}"
+                     required>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Packing profile</label>
+              <select name="packing_profile_id"
+                      class="form-select form-select-sm"
+                      required>
+                <option value="">-- Select packing profile --</option>
+                {% for pp in packing_profiles_for_semi %}
+                  <option value="{{ pp[0] }}"
+                          {% if product_semi and product_semi[5] == pp[0] %}selected{% endif %}>
+                    {{ pp[1] }}
+                    {% if pp[4] %}(Global){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Margin rule (pricing rule)</label>
+              <select name="pricing_rule_id"
+                      class="form-select form-select-sm"
+                      required>
+                <option value="">-- Select margin rule --</option>
+                {% for pr in pricing_rules_for_semi %}
+                  {# indices: 0:id,1:micron_min,2:micron_max,3:film_type,4:packing_type_id,5:w_min,6:w_max,7:margin #}
+                  <option value="{{ pr[0] }}"
+                          {% if product_semi and product_semi[6] == pr[0] %}selected{% endif %}>
+                    {{ pr[1] }}–{{ pr[2] }} µm /
+                    {{ pr[5] }}–{{ pr[6] }} kg /
+                    margin {{ "%.2f"|format(pr[7]) }}%
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input class="form-check-input"
+                   type="checkbox"
+                   name="is_active"
+                   id="semi-active-checkbox"
+                   {% if not product_semi or product_semi[7] %}checked{% endif %}>
+            <label class="form-check-label" for="semi-active-checkbox">
+              Semi is active
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Notes (optional)</label>
+            <textarea name="notes"
+                      class="form-control form-control-sm"
+                      rows="2">{% if product_semi %}{{ product_semi[8] }}{% endif %}</textarea>
+          </div>
+
+          <div class="text-end">
+            <button type="submit" class="btn btn-primary btn-sm">
+              Save semi settings
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
 </div> <!-- /tab-content -->
 
 <div id="rollBomModal"
