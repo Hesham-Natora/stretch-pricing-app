@@ -548,57 +548,109 @@ def calculate_line_price_bulk(
             cfr_unit_final += extra_per_unit
 
     # ===== اشتقاق base من unit_final (بدون أي ROUNDUP) =====
+    # ===== اشتقاق base حسب نوع الفيلم =====
     gross = gross_kg_per_roll
     net = unit_weight_net
 
-    # 1) base per kg gross من unit_final
-    if gross > 0:
-        exw_kg_gross_base = exw_unit_final / gross
-        fob_kg_gross_base = fob_unit_final / gross
-        cfr_kg_gross_base = cfr_unit_final / gross
-    else:
-        exw_kg_gross_base = fob_kg_gross_base = cfr_kg_gross_base = 0.0
-
-    # 2) base per roll من unit_final
-    exw_roll_base = exw_unit_final
-    fob_roll_base = fob_unit_final
-    cfr_roll_base = cfr_unit_final
-
-    # 3) base per kg net من unit_final
-    if net > 0:
-        exw_kg_net_base = exw_roll_base / net
-        fob_kg_net_base = fob_roll_base / net
-        cfr_kg_net_base = cfr_roll_base / net
-    else:
-        exw_kg_net_base = fob_kg_net_base = cfr_kg_net_base = 0.0
-
-    # ===== منطق الـ ROUNDUP لمحاكاة الإكسل =====
-    # EXW: نسيبه base
-    exw_kg_net = exw_kg_net_base
-    exw_kg_gross = exw_kg_gross_base
-
-    # FOB/CFR: ROUNDUP على /kg net (زي الإكسل) ثم نرجع للرول
     def round_up_2(x: float) -> float:
         return math.ceil(x * 100) / 100.0
 
-    if net > 0:
-        fob_kg_net = round_up_2(fob_kg_net_base)
-        cfr_kg_net = round_up_2(cfr_kg_net_base)
+    if film_type == "Prestretch":
+        # ===== منطق جديد للبريسترتش: ROUNDUP على /kg net =====
 
-        exw_roll = exw_kg_net * net
-        fob_roll = fob_kg_net * net
-        cfr_roll = cfr_kg_net * net
+        # 1) base per kg gross من unit_final
+        if gross > 0:
+            exw_kg_gross_base = exw_unit_final / gross
+            fob_kg_gross_base = fob_unit_final / gross
+            cfr_kg_gross_base = cfr_unit_final / gross
+        else:
+            exw_kg_gross_base = fob_kg_gross_base = cfr_kg_gross_base = 0.0
+
+        # 2) base per roll من unit_final
+        exw_roll_base = exw_unit_final
+        fob_roll_base = fob_unit_final
+        cfr_roll_base = cfr_unit_final
+
+        # 3) base per kg net من unit_final
+        if net > 0:
+            exw_kg_net_base = exw_roll_base / net
+            fob_kg_net_base = fob_roll_base / net
+            cfr_kg_net_base = cfr_roll_base / net
+        else:
+            exw_kg_net_base = fob_kg_net_base = cfr_kg_net_base = 0.0
+
+        # EXW: نسيبه base
+        exw_kg_net = exw_kg_net_base
+        exw_kg_gross = exw_kg_gross_base
+
+        # FOB/CFR: ROUNDUP على /kg net ثم نرجع للرول
+        if net > 0:
+            fob_kg_net = round_up_2(fob_kg_net_base)
+            cfr_kg_net = round_up_2(cfr_kg_net_base)
+
+            exw_roll = exw_kg_net * net
+            fob_roll = fob_kg_net * net
+            cfr_roll = cfr_kg_net * net
+        else:
+            fob_kg_net = cfr_kg_net = 0.0
+            exw_roll = fob_roll = cfr_roll = 0.0
+
+        # /kg gross للعرض فقط: نشتقها من أسعار الرول
+        if gross > 0:
+            fob_kg_gross = fob_roll / gross
+            cfr_kg_gross = cfr_roll / gross
+        else:
+            fob_kg_gross = cfr_kg_gross = 0.0
+
     else:
-        fob_kg_net = cfr_kg_net = 0.0
-        exw_roll = fob_roll = cfr_roll = 0.0
+        # ===== باقي المنتجات: المنطق القديم كما كان =====
 
-    # /kg gross للعرض فقط: نشتقها من أسعار الرول
-    if gross > 0:
-        fob_kg_gross = fob_roll / gross
-        cfr_kg_gross = cfr_roll / gross
-    else:
-        fob_kg_gross = cfr_kg_gross = 0.0
+        # 1) base per kg gross من unit_final
+        if gross_kg_per_roll > 0:
+            exw_kg_gross_base = exw_unit_final / gross_kg_per_roll
+            fob_kg_gross_base = fob_unit_final / gross_kg_per_roll
+            cfr_kg_gross_base = cfr_unit_final / gross_kg_per_roll
+        else:
+            exw_kg_gross_base = fob_kg_gross_base = cfr_kg_gross_base = 0.0
 
+        # base per roll
+        exw_roll_base = exw_unit_final
+        fob_roll_base = fob_unit_final
+        cfr_roll_base = cfr_unit_final
+
+        # base per kg net
+        if unit_weight_net > 0:
+            exw_kg_net_base = exw_roll_base / unit_weight_net
+            fob_kg_net_base = fob_roll_base / unit_weight_net
+            cfr_kg_net_base = cfr_roll_base / unit_weight_net
+        else:
+            exw_kg_net_base = fob_kg_net_base = cfr_kg_net_base = 0.0
+
+        # raw per kg gross
+        if gross_kg_per_roll > 0:
+            exw_gross_kg_raw = exw_unit_final / gross_kg_per_roll
+            fob_gross_kg_raw = fob_unit_final / gross_kg_per_roll
+            cfr_gross_kg_raw = cfr_unit_final / gross_kg_per_roll
+        else:
+            exw_gross_kg_raw = fob_gross_kg_raw = cfr_gross_kg_raw = 0.0
+
+        # تقريب على kg gross (المنطق القديم)
+        exw_kg_gross = exw_gross_kg_raw
+        fob_kg_gross = round_up_2(fob_gross_kg_raw)
+        cfr_kg_gross = round_up_2(cfr_gross_kg_raw)
+
+        # roll من kg gross المقرّبة
+        exw_roll = exw_kg_gross * gross_kg_per_roll
+        fob_roll = fob_kg_gross * gross_kg_per_roll
+        cfr_roll = cfr_kg_gross * gross_kg_per_roll
+
+        # kg net من roll
+        if unit_weight_net > 0:
+            exw_kg_net = exw_roll / unit_weight_net
+            fob_kg_net = fob_roll / unit_weight_net
+            cfr_kg_net = cfr_roll / unit_weight_net
+        else:
+            exw_kg_net = fob_kg_net = cfr_kg_net = 0.0
     # ===== 12) cost_base_per_kg لأغراض العرض فقط =====
     if film_type == "Prestretch" and total_cost_per_kg is not None:
         # للبريسترتش: نخلي cost_base_per_kg = D (إجمالي الكوست per kg gross)
