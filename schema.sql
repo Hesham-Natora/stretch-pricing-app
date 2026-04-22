@@ -360,29 +360,19 @@ CREATE TABLE IF NOT EXISTS pricing_cache_control (
 );
 
 -- NEW: BOMs per product per roll weight
-
-CREATE TABLE IF NOT EXISTS product_roll_boms (
-    id              SERIAL PRIMARY KEY,
-    product_id      INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    label           VARCHAR(100),
-    weight_from_kg  NUMERIC(10,4) NOT NULL,
-    weight_to_kg    NUMERIC(10,4) NOT NULL,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (product_id, weight_from_kg, weight_to_kg)
-);
-
 CREATE TABLE IF NOT EXISTS product_roll_bom_items (
-    id            SERIAL PRIMARY KEY,
-    roll_bom_id   INTEGER NOT NULL REFERENCES product_roll_boms(id) ON DELETE CASCADE,
-    material_id   INTEGER NOT NULL REFERENCES materials(id),
-    percentage    NUMERIC(5,4) NOT NULL,
-    scrap_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id             SERIAL PRIMARY KEY,
+    roll_bom_id    INTEGER NOT NULL REFERENCES product_roll_boms(id) ON DELETE CASCADE,
+    material_id    INTEGER REFERENCES materials(id),
+    percentage     NUMERIC(5,4) NOT NULL,
+    scrap_percent  NUMERIC(5,2) NOT NULL DEFAULT 0,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- يضمن عدم تكرار نفس المادة لنفس الـ roll_bom
     UNIQUE (roll_bom_id, material_id)
 );
 
-CREATE TABLE product_semis (
+-- جدول السيمي
+CREATE TABLE IF NOT EXISTS product_semis (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL UNIQUE
         REFERENCES products(id) ON DELETE CASCADE,
@@ -396,3 +386,30 @@ CREATE TABLE product_semis (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     notes TEXT
 );
+
+ALTER TABLE product_semis
+    ADD COLUMN IF NOT EXISTS roll_bom_id INTEGER
+        REFERENCES product_roll_boms(id) ON DELETE RESTRICT;
+
+-- السماح بأن يكون material_id = NULL (لما السطر يكون سيمي فقط)
+ALTER TABLE product_roll_bom_items
+    ALTER COLUMN material_id DROP NOT NULL;
+
+-- إضافة عمود السيمي لو مش موجود
+ALTER TABLE product_roll_bom_items
+    ADD COLUMN IF NOT EXISTS semi_product_id INTEGER
+        REFERENCES product_semis(product_id) ON DELETE RESTRICT;
+
+-- إضافة UNIQUE على (roll_bom_id, semi_product_id) لو مش موجود
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM   pg_constraint
+        WHERE  conname = 'product_roll_bom_items_unique_semi'
+    ) THEN
+        ALTER TABLE product_roll_bom_items
+            ADD CONSTRAINT product_roll_bom_items_unique_semi
+            UNIQUE (roll_bom_id, semi_product_id);
+    END IF;
+END$$;

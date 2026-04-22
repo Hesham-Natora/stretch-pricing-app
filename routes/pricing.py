@@ -22,6 +22,9 @@ from services.costing import (
     get_material_landed_price_per_kg,
     get_energy_rate_usd_per_kwh,
     get_materials_landed_price_per_kg_bulk,
+    get_semi_total_cost_per_kg,
+    get_semi_price_net_per_kg,
+    get_semi_price_net_per_kg_with_width
 )
 
 #from xhtml2pdf import pisa
@@ -30,7 +33,6 @@ from flask import make_response
 
 from flask_login import login_required, current_user
 from routes.auth import roles_required
-
 
 pricing_bp = Blueprint(
     "pricing", __name__, template_folder="../templates/pricing"
@@ -57,6 +59,7 @@ def round_3(x) -> float:
     return float(
         Decimal(str(x)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
     )
+    
     
 def select_packing_profile_id_for_item(
     *,
@@ -147,7 +150,7 @@ def calculate_line_price_bulk(
       margin على total_cost_unit
       Extras:
         - Color extra محسوب per kg gross ويتحوّل إلى extra per roll.
-        - Prestretch extra محسوب per kg net ويتحوّل إلى extra per roll.
+        - Prestretch extra محسوب per kg gross ويتحوّل إلى extra per roll.
         - إجمالي extra يضاف بعد المارجن على مستوى الوحدة (لفة).
     """
 
@@ -172,12 +175,15 @@ def calculate_line_price_bulk(
     total_cost_per_kg = 0.0
 
     # --- اختيار roll BOM المناسب حسب وزن الرول ---
-    # الشكل المتوقع:
+    # الشكل المتوقع بعد التعديل:
     # product_roll_bom_map[product_id] = [
     #   {
     #       "weight_from_kg": ...,
     #       "weight_to_kg": ...,
-    #       "items": [(material_id, pct), ...],
+    #       "items": [
+    #           {"material_id": ..., "semi_product_id": ..., "pct": ...},
+    #           ...
+    #       ],
     #   },
     #   ...
     # ]
@@ -189,8 +195,8 @@ def calculate_line_price_bulk(
             w_from = float(rb.get("weight_from_kg", 0) or 0)
             w_to = float(rb.get("weight_to_kg", 0) or 0)
             if (w_from == 0 and w_to == 0) or (
-                gross_kg_per_roll >= w_from and
-                (w_to == 0 or gross_kg_per_roll <= w_to)
+                gross_kg_per_roll >= w_from
+                and (w_to == 0 or gross_kg_per_roll <= w_to)
             ):
                 selected_bom_items = rb.get("items", [])
                 break
@@ -199,10 +205,35 @@ def calculate_line_price_bulk(
     if not selected_bom_items:
         return None, "No roll BOM found for this product and roll weight"
 
-    # RM cost using material_price_map
-    for material_id, pct in selected_bom_items:
-        price = material_price_map.get(material_id, 0.0)
-        total_cost_per_kg += float(pct or 0) * price
+    # RM cost using material_price_map + semi *price* (نفس الـ UI)
+    for item in selected_bom_items:
+        material_id = item.get("material_id")
+        semi_product_id = item.get("semi_product_id")
+        pct = float(item.get("pct") or 0.0)
+
+        price = 0.0
+
+        if semi_product_id:
+            semi_id = int(semi_product_id)
+            try:
+                # لو المنتج النهائي بريسترتش، نطبّق عرض الكوتيشن على السيمي runtime فقط
+                if film_type == "Prestretch" and width_mm and width_mm > 0:
+                    # شرط العرض الخاص بالسيمي مطبّق داخل get_semi_total_cost_per_kg_with_width
+                    price = float(
+                        get_semi_price_net_per_kg_with_width(semi_id, float(width_mm)) or 0.0
+                    )
+                else:
+                    # باقي الحالات (كل المنتجات الأخرى) تفضل على السلوك القديم
+                    price = float(
+                        get_semi_price_net_per_kg(semi_id) or 0.0
+                    )
+            except Exception:
+                price = 0.0
+        elif material_id:
+            # مادة خام عادية من الـ landed price map
+            price = float(material_price_map.get(int(material_id), 0.0) or 0.0)
+
+        total_cost_per_kg += pct * price
 
     eff_factor = 1 + (bom_scrap_percent / 100.0)
     total_cost_per_kg *= eff_factor
@@ -303,6 +334,66 @@ def calculate_line_price_bulk(
                     packing_cost_per_kg = (
                         packing_cost_per_unit / net_kg_per_roll_safe
                     )
+    # ===== شرط خاص بالبريسترتش مع البوكس (packing_type_id = 4, box material_id = 16) =====
+    if (
+        film_type == "Prestretch"
+        and int(packing_type_id or 0) == 4
+        and rolls_per_pallet
+        and rolls_per_pallet > 0
+    ):
+        # عدد البوكسات في البالتة = عدد الرولات / 6
+        # لو عايز تعملها ceil لآخر كرتونة كاملة، استبدل السطر اللي تحت بسطر math.ceil
+        boxes_per_pallet = rolls_per_pallet / 6.0
+        # مثال لو حبيت بعدين:
+        # import math
+        # boxes_per_pallet = math.ceil(rolls_per_pallet / 6.0)
+
+        # سعر البوكس من material_id = 16 (من نفس الـ material_price_map المستخدم في الـ BOM)
+        # سعر البوكس من materials.id = 16 مع تحويل العملة لـ USD
+        box_price_usd = 0.0
+        with get_db() as cur:
+            cur.execute(
+                """
+                SELECT price_per_unit, currency
+                FROM materials
+                WHERE id = %s
+                """,
+                (16,),
+            )
+            row_box = cur.fetchone()
+
+        if row_box:
+            box_price_value = float(row_box[0] or 0)
+            box_currency = (row_box[1] or "USD").strip().upper()
+
+            if box_price_value > 0:
+                if box_currency == "USD":
+                    box_price_usd = box_price_value
+                else:
+                    # نفترض EGP → USD باستخدام نفس egp_per_usd الممرّر للدالة
+                    if egp_per_usd > 0:
+                        box_price_usd = box_price_value / egp_per_usd
+
+        print(
+            "DBG_BOX",
+            "rolls_per_pallet=", rolls_per_pallet,
+            "boxes_per_pallet=", boxes_per_pallet,
+            "box_price_usd=", box_price_usd,
+        )
+
+        if box_price_usd > 0:
+            # إجمالي تكلفة البوكسات للبالتة
+            total_box_cost_per_pallet = boxes_per_pallet * box_price_usd
+
+            # تكلفة البوكس لكل لفة
+            extra_box_cost_per_unit = total_box_cost_per_pallet / rolls_per_pallet
+
+            # أضفها على packing_cost_per_unit
+            packing_cost_per_unit += extra_box_cost_per_unit
+
+            # حدّث packing_cost_per_kg بناءً على الكيلو الصافي للرول
+            if net_kg_per_roll_safe > 0:
+                packing_cost_per_kg = packing_cost_per_unit / net_kg_per_roll_safe
 
     # ===== 4) Margin + extras + payment term =====
 
@@ -331,7 +422,7 @@ def calculate_line_price_bulk(
 
     # ===== Extras: color on gross, prestretch on net =====
     color_extra_gross = float(pricing_extras.get("color_extra_usd_per_kg", 0.0))
-    prestretch_extra_net = float(pricing_extras.get("prestretch_extra_usd_per_kg", 0.0))
+    prestretch_extra_gross = float(pricing_extras.get("prestretch_extra_usd_per_kg", 0.0))
     foreign_extra_mode = pricing_extras.get("foreign_extra_mode", "percent")
     foreign_extra_value = float(pricing_extras.get("foreign_extra_value", 0.0))
 
@@ -342,22 +433,51 @@ def calculate_line_price_bulk(
 
     # 2) Extra per roll من prestretch (per kg net)
     prestretch_extra_roll = 0.0
-    if film_type == "prestretch" and unit_weight_net > 0:
-        prestretch_extra_roll = prestretch_extra_net * unit_weight_net
+    if film_type == "Prestretch" and gross_kg_per_roll > 0:
+        prestretch_extra_roll = prestretch_extra_gross * gross_kg_per_roll
 
     # إجمالي Extra per roll
     extra_roll = color_extra_roll + prestretch_extra_roll
 
     # ===== منطق الكوست بالضبط =====
-
-    # 1) تكلفة الفيلم الصافي /kg net (film only)
+    # 1) تكلفة الفيلم الصافي /kg كبداية عامة (net-style)
     film_cost_per_kg = rm_cost_per_kg + energy_cost_per_kg + machine_oh_per_kg
-
-    # 2) تكلفة الفيلم الصافي في الوحدة (لفة)
-    film_cost_unit = film_cost_per_kg * unit_weight_net
 
     # 3) Pack+core per unit
     pack_core_unit = core_cost_per_unit + packing_cost_per_unit
+
+    # ===== 3.5) لوجيك خاص للبريسترتش =====
+    material_cost_per_kg_gross = None
+    core_cost_per_kg_gross = None
+    packing_cost_per_kg_gross = None
+    total_cost_per_kg_gross_prestretch = None
+
+    if film_type == "Prestretch" and gross_kg_per_roll > 0 and net_kg_per_roll > 0:
+        # A: material على gross
+        material_cost_per_kg_gross = (rm_cost_per_kg * net_kg_per_roll) / gross_kg_per_roll
+
+        # B: core على gross
+        core_cost_per_kg_gross = core_cost_per_unit / gross_kg_per_roll if core_cost_per_unit > 0 else 0.0
+
+        # C: packing على gross
+        packing_cost_per_kg_gross = packing_cost_per_unit / gross_kg_per_roll if packing_cost_per_unit > 0 else 0.0
+
+        # D: إجمالي تكلفة البريسترتش per kg gross
+        total_cost_per_kg_gross_prestretch = (
+            material_cost_per_kg_gross
+            + core_cost_per_kg_gross
+            + packing_cost_per_kg_gross
+        )
+
+        # نستخدم تعريف gross للبريسترتش
+        film_cost_per_kg = material_cost_per_kg_gross
+        total_cost_per_kg = total_cost_per_kg_gross_prestretch
+
+        # تكلفة الفيلم في الوحدة على أساس gross
+        film_cost_unit = film_cost_per_kg * gross_kg_per_roll
+    else:
+        # باقي المنتجات: نفس اللوجيك القديم (net-style)
+        film_cost_unit = film_cost_per_kg * unit_weight_net
 
     # 4) إجمالي تكلفة الوحدة قبل margin/extra
     total_cost_unit = film_cost_unit + pack_core_unit
@@ -475,9 +595,12 @@ def calculate_line_price_bulk(
         exw_kg_net = fob_kg_net = cfr_kg_net = 0.0
 
     # ===== 12) cost_base_per_kg لأغراض العرض فقط =====
-    cost_base_per_kg = (
-        film_cost_per_kg + core_cost_per_kg + packing_cost_per_kg
-    )
+    if film_type == "Prestretch" and total_cost_per_kg is not None:
+        # للبريسترتش: نخلي cost_base_per_kg = D (إجمالي الكوست per kg gross)
+        cost_base_per_kg = total_cost_per_kg
+    else:
+        # لباقي المنتجات: نفس التعريف القديم (net-style)
+        cost_base_per_kg = film_cost_per_kg + core_cost_per_kg + packing_cost_per_kg
 
     line_result = {
         "product_id": product_id,
@@ -580,7 +703,8 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             "packing_profile_cost_map": defaultdict(lambda: {"usd": 0.0, "egp": 0.0}),
             "packing_cost_per_pallet_global": {},
             "energy_rate": 0.0,
-            "core_price_per_kg_usd": 0.0,
+            "core_price_standard_usd": 0.0,
+            "core_price_prestretch_usd": 0.0,
             "product_machine_map": defaultdict(list),
             "machine_costs_map": defaultdict(list),
             "product_info_map": {},
@@ -699,25 +823,41 @@ def load_pricing_static_data(cur, egp_per_usd: float):
     # --- Energy rate ---
     energy_rate = get_energy_rate_usd_per_kwh()
 
-    # --- CORE price /kg ---
+    # --- CORE prices /kg (standard + prestretch) ---
+    core_price_standard_usd = 0.0      # MAT-0010 Core
+    core_price_prestretch_usd = 0.0    # MAT-0011 Core pre-stretch
+
     cur.execute(
         """
-        SELECT price_per_unit, currency
+        SELECT id, price_per_unit, currency
         FROM materials
         WHERE category = 'CORE'
+        AND id IN (10, 11)
         ORDER BY id
-        LIMIT 1
         """
     )
-    row_core = cur.fetchone()
-    core_price_per_kg_usd = 0.0
-    if row_core:
-        core_price, core_curr = row_core[0], (row_core[1] or "USD").upper()
-        core_price = float(core_price or 0)
-        if core_curr != "USD" and egp_per_usd > 0:
-            core_price_per_kg_usd = core_price / egp_per_usd
+    rows_core = cur.fetchall()
+
+    for mat_id, price_per_unit, currency in rows_core:
+        price = float(price_per_unit or 0)
+        curr = (currency or "USD").strip().upper()
+
+        if price <= 0:
+            continue
+
+        # تحويل العملة لـ USD لو لزم الأمر
+        if curr == "USD":
+            price_usd = price
         else:
-            core_price_per_kg_usd = core_price
+            if egp_per_usd > 0:
+                price_usd = price / egp_per_usd
+            else:
+                price_usd = 0.0
+
+        if mat_id == 10:
+            core_price_standard_usd = price_usd
+        elif mat_id == 11:
+            core_price_prestretch_usd = price_usd
 
     # --- packing profiles + items + overrides ---
 
@@ -958,6 +1098,7 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             SELECT
                 pri.roll_bom_id,
                 pri.material_id,
+                pri.semi_product_id,
                 pri.percentage
             FROM product_roll_bom_items pri
             WHERE pri.roll_bom_id = ANY(%s)
@@ -965,9 +1106,13 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             (roll_bom_ids,),
         )
         rows_roll_items = cur.fetchall()
-        for roll_bom_id, material_id, pct in rows_roll_items:
+        for roll_bom_id, material_id, semi_product_id, pct in rows_roll_items:
             roll_bom_items_map[int(roll_bom_id)].append(
-                (int(material_id), float(pct or 0.0))
+                {
+                    "material_id": int(material_id) if material_id is not None else None,
+                    "semi_product_id": int(semi_product_id) if semi_product_id is not None else None,
+                    "pct": float(pct or 0.0),
+                }
             )
 
     product_roll_bom_map = defaultdict(list)
@@ -977,7 +1122,7 @@ def load_pricing_static_data(cur, egp_per_usd: float):
             {
                 "weight_from_kg": float(w_from or 0.0),
                 "weight_to_kg": float(w_to or 0.0),
-                "items": items,
+                "items": items,  # list of dicts: {material_id, semi_product_id, pct}
             }
         )
 
@@ -1010,7 +1155,8 @@ def load_pricing_static_data(cur, egp_per_usd: float):
         "packing_profile_cost_map": packing_profile_cost_map,
         "packing_cost_per_pallet_global": packing_cost_per_pallet_global,
         "energy_rate": energy_rate,
-        "core_price_per_kg_usd": core_price_per_kg_usd,
+        "core_price_standard_usd": core_price_standard_usd,
+        "core_price_prestretch_usd": core_price_prestretch_usd,
         "product_machine_map": product_machine_map,
         "machine_costs_map": machine_costs_map,
         "product_info_map": product_info_map,
@@ -1944,7 +2090,8 @@ def pricing_screen():
                         packing_profile_overrides = static_data["packing_profile_overrides"]
                         packing_profile_cost_map = static_data["packing_profile_cost_map"]
                         energy_rate = static_data["energy_rate"]
-                        core_price_per_kg_usd = static_data["core_price_per_kg_usd"]
+                        core_price_standard_usd = static_data["core_price_standard_usd"]
+                        core_price_prestretch_usd = static_data["core_price_prestretch_usd"]
                         product_machine_map = static_data["product_machine_map"]
                         machine_costs_map = static_data["machine_costs_map"]
                         product_info_map_cached = static_data["product_info_map"]
@@ -1956,12 +2103,11 @@ def pricing_screen():
                         # 1) material_ids لكل المنتجات المطلوبة من الكاش roll BOM (للتتبع فقط لو حابب)
                         material_ids = set()
                         for pid in product_ids:
-                            for mid, pct in [
-                                item
-                                for rb in product_roll_bom_map.get(pid, [])
-                                for item in rb.get("items", [])
-                            ]:
-                                material_ids.add(int(mid))
+                            for rb in product_roll_bom_map.get(pid, []):
+                                for item in rb.get("items", []):
+                                    mid = item.get("material_id")
+                                    if mid is not None:
+                                        material_ids.add(int(mid))
 
                         print(
                             "[pricing-materials-bulk] using cached material_price_map for "
@@ -2074,6 +2220,15 @@ def pricing_screen():
                 fob_cost_per_kg_line = 0.0
                 sea_freight_per_kg_line = 0.0
 
+            # اختيار نوع الكور حسب نوع الفيلم للمنتج
+            p_info_cached = product_info_map_cached.get(product_id)
+            film_type_line = (p_info_cached.get("film_type") if p_info_cached else "standard").strip()
+
+            if film_type_line == "Prestretch":
+                core_price_per_kg_usd_line = core_price_prestretch_usd
+            else:
+                core_price_per_kg_usd_line = core_price_standard_usd
+
             line_result, err = calculate_line_price_bulk(
                 product_id=product_id,
                 is_colored=is_colored,
@@ -2085,7 +2240,7 @@ def pricing_screen():
                 rolls_per_pallet=rolls_per_pallet,
                 pallet_type_id=pallet_type_id,
                 packing_type_id=packing_type_id,
-                core_price_per_kg_usd=core_price_per_kg_usd,
+                core_price_per_kg_usd=core_price_per_kg_usd_line,
                 packing_profile_cost_map=packing_profile_cost_map,
                 packing_profiles_by_id=packing_profiles_by_id,
                 packing_profile_overrides=packing_profile_overrides,
@@ -2129,8 +2284,8 @@ def pricing_screen():
             # نحسب core/packing per roll مرة واحدة هنا ونحفظها في line_result
             core_cost_per_unit_roll = 0.0
             core_weight = float(core_weight_kg or 0)
-            if core_weight > 0 and core_price_per_kg_usd > 0:
-                core_cost_per_unit_roll = core_price_per_kg_usd * core_weight  # USD per roll
+            if core_weight > 0 and core_price_per_kg_usd_line > 0:
+                core_cost_per_unit_roll = core_price_per_kg_usd_line * core_weight
 
             packing_cost_per_unit_roll = 0.0
             try:

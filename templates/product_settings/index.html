@@ -209,16 +209,26 @@
 
               <div class="mb-3">
                 <label class="form-label">Material</label>
-                <select name="material_id" id="ps-bom-material" class="form-select form-select-sm" required>
+                <select name="item_id" id="ps-bom-material" class="form-select form-select-sm" required>
                   <option value="">-- Select material --</option>
                   {% for m in materials %}
-                    <option value="{{ m[0] }}">
-                      {{ m[3] }} - {{ m[1] }} | {{ m[2] }} ({{ "%.4f"|format(m[5]) }} USD/{{ m[4] }})
+                    {# m: dict = {type, id, code, name, category, unit, price_per_unit} #}
+                    {% set is_semi = (m.category == 'SEMI') %}
+                    <option
+                      value="{{ m.id if m.type == 'material' else product[0] }}"
+                      data-item-type="{{ m.type }}"
+                    >
+                      {{ m.category }} - {{ m.code }} | {{ m.name }}
+                      {% if m.type == 'material' %}
+                        ({{ "%.4f"|format(m.price_per_unit) }} USD/{{ m.unit }})
+                      {% else %}
+                        (semi price from costing)
+                      {% endif %}
                     </option>
                   {% endfor %}
                 </select>
+                <input type="hidden" name="item_type" id="ps-bom-item-type" value="material">
               </div>
-
               <div class="mb-3">
                 <label class="form-label">Percentage (%)</label>
                 <input type="number" name="percentage" id="ps-bom-percentage"
@@ -266,12 +276,12 @@
                 <tbody id="ps-bom-tbody">
                   {% if bom_items %}
                     {% for item in bom_items %}
-                      {% set pct = item[5] %}
-                      {% set price = item[8] %}
+                      {% set pct = item[6] %}
+                      {% set price = item[9] %}
                       {% set contrib = pct * price %}
                       <tr data-item-id="{{ item[0] }}" data-material-id="{{ item[1] }}">
                         <td class="text-nowrap">
-                          {{ item[4] }} - {{ item[2] }} | {{ item[3] }}
+                          {{ item[5] }} - {{ item[3] }} | {{ item[4] }}
                         </td>
                         <td class="text-end">% {{ "%.2f"|format(pct * 100) }}</td>
                         <td class="text-end">{{ "%.4f"|format(price) }}</td>
@@ -378,7 +388,28 @@
                      required>
             </div>
           </div>
-
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Semi Roll BOM</label>
+            <select name="roll_bom_id"
+                    class="form-select form-select-sm"
+                    required>
+              <option value="">-- Select roll BOM --</option>
+              {% for rb in semi_roll_boms %}
+                {% set rb_id = rb[0] %}
+                {% set micron = rb[1] %}
+                {% set stretch = rb[2] %}
+                {% set rb_label = rb[3] %}
+                {% set w_from = rb[4] %}
+                {% set w_to = rb[5] %}
+                <option value="{{ rb_id }}"
+                        {% if product_semi and product_semi[9] == rb_id %}selected{% endif %}>
+                  {{ micron }} µm - {{ stretch }}% -
+                  {{ rb_label or ('Range ' ~ w_from ~ '–' ~ w_to ~ ' kg') }}
+                  ({{ w_from }} – {{ w_to }} kg)
+                </option>
+              {% endfor %}
+            </select>
+          </div>          
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label">Packing profile</label>
@@ -750,7 +781,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="btn-group btn-group-sm">
               <button type="button"
                       class="btn btn-outline-primary btn-sm me-1 ps-bom-edit-btn"
-                      data-material-id="${item.material_id}"
+                      data-material-id="${item.material_id || ''}"
                       data-percentage="${item.percentage.toFixed(2)}">
                 <i class="bi bi-pencil"></i>
               </button>
@@ -780,6 +811,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   bomForm.addEventListener('submit', function (e) {
     e.preventDefault();
+
+    const matSelect = document.getElementById('ps-bom-material');
+    const itemTypeInput = document.getElementById('ps-bom-item-type');
+
+    if (matSelect && itemTypeInput) {
+      const selectedOption = matSelect.options[matSelect.selectedIndex];
+      const t = selectedOption ? selectedOption.getAttribute('data-item-type') : 'material';
+      itemTypeInput.value = t || 'material';
+    }
 
     const formData = new FormData(bomForm);
 

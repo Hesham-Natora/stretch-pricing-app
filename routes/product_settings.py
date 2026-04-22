@@ -1,7 +1,11 @@
 # routes/product_settings.py
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from db import get_db
-from services.costing import get_material_landed_price_per_kg
+from services.costing import (
+    get_material_landed_price_per_kg,
+    get_roll_bom_cost_per_kg_with_semi,
+    get_semi_price_net_per_kg,
+)
 from .settings import _bump_pricing_cache_version
 from flask_login import current_user
 
@@ -56,7 +60,7 @@ def _load_machines_tab(product_id):
 
 def _load_bom_tab(product_id, product, roll_bom_id=None):
     with get_db() as cur:
-        # المواد
+        # المواد العادية
         cur.execute(
             """
             SELECT id, code, name, category, unit, price_per_unit
@@ -65,6 +69,45 @@ def _load_bom_tab(product_id, product, roll_bom_id=None):
             """
         )
         materials = cur.fetchall()
+
+        # نحاول نجيب السيمي للمنتج ده (لو موجود)
+        cur.execute(
+            """
+            SELECT id
+            FROM product_semis
+            WHERE product_id = %s
+            """,
+            (product_id,),
+        )
+        semi_row = cur.fetchone()
+
+        # materials_for_bom كـ dicts للـ template
+        materials_for_bom = [
+            {
+                "type": "material",
+                "id": m[0],
+                "code": m[1],
+                "name": m[2],
+                "category": m[3],
+                "unit": m[4],
+                "price_per_unit": float(m[5] or 0),
+            }
+            for m in materials
+        ]
+
+        if semi_row:
+            # عنصر يمثل السيمي في نفس الليستة
+            materials_for_bom.append(
+                {
+                    "type": "semi",
+                    "id": product_id,  # نستخدم product_id للسيمي
+                    "code": f"SEMI-{product_id}",
+                    "name": "Semi (Prestretch)",
+                    "category": "SEMI",
+                    "unit": "kg",
+                    "price_per_unit": 0.0,  # السعر الفعلي من get_semi_price_net_per_kg
+                }
+            )
 
         # رول BOMs
         cur.execute(
@@ -91,7 +134,6 @@ def _load_bom_tab(product_id, product, roll_bom_id=None):
         bom_scrap_percent = float(product[5] or 0)
 
         if roll_boms:
-            # لو roll_bom_id متبعت، حاول تختاره؛ لو مش موجود اختار أول واحد
             if roll_bom_id:
                 for rb in roll_boms:
                     if rb[0] == roll_bom_id:
@@ -102,48 +144,89 @@ def _load_bom_tab(product_id, product, roll_bom_id=None):
 
             selected_roll_bom_id = selected_roll_bom[0]
 
+            # نجيب عناصر الـ BOM (ماتريال + سيمي)
             cur.execute(
                 """
                 SELECT
-                    pri.id,             -- 0
-                    pri.material_id,    -- 1
-                    m.code,             -- 2
-                    m.name,             -- 3
-                    m.category,         -- 4
-                    pri.percentage,     -- 5
-                    pri.scrap_percent,  -- 6
-                    m.unit,             -- 7
-                    m.price_per_unit    -- 8
+                    pri.id,               -- 0
+                    pri.material_id,      -- 1
+                    pri.semi_product_id,  -- 2
+                    m.code,               -- 3
+                    m.name,               -- 4
+                    m.category,           -- 5
+                    pri.percentage,       -- 6
+                    pri.scrap_percent,    -- 7
+                    m.unit,               -- 8
+                    m.price_per_unit      -- 9
                 FROM product_roll_bom_items pri
-                JOIN materials m ON pri.material_id = m.id
+                LEFT JOIN materials m ON pri.material_id = m.id
                 WHERE pri.roll_bom_id = %s
-                ORDER BY m.category, m.code
+                ORDER BY m.category NULLS LAST, m.code NULLS LAST, pri.id
                 """,
                 (selected_roll_bom_id,),
             )
-            roll_bom_items = cur.fetchall()
+            roll_bom_items = list(cur.fetchall())
 
             base_cost = 0.0
             total_pct = 0.0
-            for item in roll_bom_items:
-                pct = float(item[5] or 0)
-                price = float(item[8] or 0)
-                base_cost += pct * price
+
+            # نعدل الـ items في الذاكرة عشان نعبي بيانات السيمي + نحسب السعر
+            for idx, item in enumerate(roll_bom_items):
+                (
+                    item_id,
+                    material_id,
+                    semi_product_id,
+                    m_code,
+                    m_name,
+                    m_category,
+                    pct,
+                    scrap_percent,
+                    m_unit,
+                    m_price_per_unit,
+                ) = item
+
+                pct = float(pct or 0)
+
+                # لو ده سيمي
+                if semi_product_id is not None:
+                    # نجيب سعر السيمي الصافي per kg
+                    semi_price = float(
+                        get_semi_price_net_per_kg(semi_product_id) or 0
+                    )
+                    m_price_per_unit = semi_price
+                    m_code = f"SEMI-{semi_product_id}"
+                    m_name = "Semi (Prestretch)"
+                    m_category = "SEMI"
+                    m_unit = "kg"
+
+                    # نحدّث الـ tuple في الليستة بعد التعديل
+                    roll_bom_items[idx] = (
+                        item_id,
+                        material_id,
+                        semi_product_id,
+                        m_code,
+                        m_name,
+                        m_category,
+                        pct,
+                        scrap_percent,
+                        m_unit,
+                        m_price_per_unit,
+                    )
+                else:
+                    m_price_per_unit = float(m_price_per_unit or 0)
+
+                # حساب base_cost و total_pct
+                base_cost += pct * m_price_per_unit
                 total_pct += pct
 
             eff_factor = 1 + (bom_scrap_percent / 100.0)
             total_cost = base_cost * eff_factor
 
-            total_cost_per_kg = 0.0
-            for item in roll_bom_items:
-                pct = float(item[5] or 0)
-                material_id = int(item[1])
-                price = get_material_landed_price_per_kg(material_id)
-                total_cost_per_kg += pct * price
-            total_cost_per_kg *= eff_factor
+            # دي تستخدم اللوجيك الكامل اللي عندك (بما فيه السيمي)
+            total_cost_per_kg = get_roll_bom_cost_per_kg_with_semi(selected_roll_bom_id)
 
     return (
-        materials,
+        materials_for_bom,
         roll_boms,
         selected_roll_bom,
         roll_bom_items,
@@ -190,7 +273,8 @@ def index(product_id):
                 packing_profile_id,
                 pricing_rule_id,
                 is_active,
-                COALESCE(notes, '')
+                COALESCE(notes, ''),
+                roll_bom_id
             FROM product_semis
             WHERE product_id = %s
             """,
@@ -232,6 +316,25 @@ def index(product_id):
             """
         )
         pricing_rules_for_semi = cur.fetchall()
+        
+        # 4) كل الـ roll_boms لكل المنتجات (للسيمي)
+        cur.execute(
+            """
+            SELECT
+                prb.id,                     -- 0 roll_bom_id
+                p.micron,                   -- 1
+                p.stretchability_percent,   -- 2
+                COALESCE(prb.label, ''),    -- 3 label
+                prb.weight_from_kg,         -- 4
+                prb.weight_to_kg,           -- 5
+                prb.is_active               -- 6
+            FROM product_roll_boms prb
+            JOIN products p ON prb.product_id = p.id
+            WHERE prb.is_active = TRUE
+            ORDER BY p.micron, p.stretchability_percent, prb.weight_from_kg, prb.weight_to_kg, prb.id
+            """
+        )
+        semi_roll_boms = cur.fetchall()
 
     return render_template(
         "product_settings/index.html",
@@ -250,6 +353,7 @@ def index(product_id):
         product_semi=product_semi,
         packing_profiles_for_semi=packing_profiles_for_semi,
         pricing_rules_for_semi=pricing_rules_for_semi,
+        semi_roll_boms=semi_roll_boms,
     )
 
 
@@ -432,16 +536,17 @@ def roll_bom_details(product_id, roll_bom_id):
 
     items_json = []
     for item in roll_bom_items:
-        pct = float(item[5] or 0)
-        price = float(item[8] or 0)
+        pct = float(item[6] or 0)
+        price = float(item[9] or 0)
         contrib = pct * price
         items_json.append(
             {
                 "id": item[0],
                 "material_id": item[1],
-                "material_code": item[2],
-                "material_name": item[3],
-                "category": item[4],
+                "semi_product_id": item[2],
+                "material_code": item[3],
+                "material_name": item[4],
+                "category": item[5],
                 "percentage": pct * 100.0,
                 "price_per_kg": price,
                 "contribution": contrib,
@@ -466,20 +571,28 @@ def bom_save(product_id):
         return redirect(url_for("product_settings.index", product_id=product_id))
 
     roll_bom_id = int(request.form.get("roll_bom_id") or 0)
-    material_id = int(request.form.get("material_id") or 0)
+    item_type = (request.form.get("item_type") or "material").strip()
+    item_id = int(request.form.get("item_id") or 0)
     percentage_input = float(request.form.get("percentage") or 0)
 
     if roll_bom_id <= 0:
         return jsonify({"error": "Please select or create a roll BOM first."}), 400
 
-    if material_id <= 0 or percentage_input <= 0:
-        return jsonify({"error": "Material and percentage are required."}), 400
+    if item_id <= 0 or percentage_input <= 0:
+        return jsonify({"error": "Item and percentage are required."}), 400
 
     percentage = percentage_input / 100.0
     scrap_percent = 0.0
 
+    material_id = None
+    semi_product_id = None
+
+    if item_type == "semi":
+        semi_product_id = item_id  # ده product_id للسيمي
+    else:
+        material_id = item_id
+
     with get_db() as cur:
-        # تأكد إن الـ roll_bom فعلاً للـ product ده
         cur.execute(
             "SELECT product_id FROM product_roll_boms WHERE id = %s",
             (roll_bom_id,),
@@ -490,13 +603,10 @@ def bom_save(product_id):
 
         cur.execute(
             """
-            INSERT INTO product_roll_bom_items (roll_bom_id, material_id, percentage, scrap_percent)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (roll_bom_id, material_id) DO UPDATE
-            SET percentage = EXCLUDED.percentage,
-                scrap_percent = EXCLUDED.scrap_percent
+            INSERT INTO product_roll_bom_items (roll_bom_id, material_id, semi_product_id, percentage, scrap_percent)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (roll_bom_id, material_id, percentage, scrap_percent),
+            (roll_bom_id, material_id, semi_product_id, percentage, scrap_percent),
         )
 
     _bump_pricing_cache_version()
@@ -516,19 +626,19 @@ def bom_save(product_id):
         total_cost_per_kg,
     ) = _load_bom_tab(product_id, product, roll_bom_id=roll_bom_id)
 
-    # نضمن إن _load_bom_tab رجّع نفس roll_bom_id كمختار (هنضبطها في UI لاحقًا)
     items_json = []
     for item in roll_bom_items:
-        pct = float(item[5] or 0)
-        price = float(item[8] or 0)
+        pct = float(item[6] or 0)
+        price = float(item[9] or 0)
         contrib = pct * price
         items_json.append(
             {
                 "id": item[0],
                 "material_id": item[1],
-                "material_code": item[2],
-                "material_name": item[3],
-                "category": item[4],
+                "semi_product_id": item[2],
+                "material_code": item[3],
+                "material_name": item[4],
+                "category": item[5],
                 "percentage": pct * 100.0,
                 "price_per_kg": price,
                 "contribution": contrib,
@@ -599,16 +709,17 @@ def bom_delete(product_id, item_id):
 
     items_json = []
     for item in roll_bom_items:
-        pct = float(item[5] or 0)
-        price = float(item[8] or 0)
+        pct = float(item[6] or 0)
+        price = float(item[9] or 0)
         contrib = pct * price
         items_json.append(
             {
                 "id": item[0],
                 "material_id": item[1],
-                "material_code": item[2],
-                "material_name": item[3],
-                "category": item[4],
+                "semi_product_id": item[2],
+                "material_code": item[3],
+                "material_name": item[4],
+                "category": item[5],
                 "percentage": pct * 100.0,
                 "price_per_kg": price,
                 "contribution": contrib,
@@ -636,6 +747,7 @@ def semi_save(product_id):
     gross_kg_per_roll = (request.form.get("gross_kg_per_roll") or "").strip()
     core_kg_per_roll  = (request.form.get("core_kg_per_roll") or "").strip()
     rolls_per_pallet  = (request.form.get("rolls_per_pallet") or "").strip()
+    roll_bom_id = int(request.form.get("roll_bom_id") or 0)
     packing_profile_id = int(request.form.get("packing_profile_id") or 0)
     pricing_rule_id    = int(request.form.get("pricing_rule_id") or 0)
     is_active          = bool(request.form.get("is_active"))
@@ -660,6 +772,10 @@ def semi_save(product_id):
                 raise ValueError()
         except ValueError:
             error = "Rolls per pallet must be a positive integer."
+            
+    # اختيار رول BOM
+    if not error and roll_bom_id <= 0:
+        error = "Please select roll BOM for semi."
 
     # اختيار البروفايل
     if not error and packing_profile_id <= 0:
@@ -689,6 +805,7 @@ def semi_save(product_id):
                 SET gross_kg_per_roll = %s,
                     core_kg_per_roll  = %s,
                     rolls_per_pallet  = %s,
+                    roll_bom_id        = %s,
                     packing_profile_id = %s,
                     pricing_rule_id    = %s,
                     is_active          = %s,
@@ -699,6 +816,7 @@ def semi_save(product_id):
                     gross_val,
                     core_val,
                     rolls_val,
+                    roll_bom_id,
                     packing_profile_id,
                     pricing_rule_id,
                     is_active,
@@ -715,18 +833,20 @@ def semi_save(product_id):
                     gross_kg_per_roll,
                     core_kg_per_roll,
                     rolls_per_pallet,
+                    roll_bom_id,
                     packing_profile_id,
                     pricing_rule_id,
                     is_active,
                     notes
                 )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     product_id,
                     gross_val,
                     core_val,
                     rolls_val,
+                    roll_bom_id,
                     packing_profile_id,
                     pricing_rule_id,
                     is_active,
@@ -738,3 +858,4 @@ def semi_save(product_id):
 
     flash("Semi settings saved.", "success")
     return redirect(url_for("product_settings.index", product_id=product_id))
+
