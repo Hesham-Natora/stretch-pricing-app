@@ -317,17 +317,18 @@ def index(product_id):
         )
         pricing_rules_for_semi = cur.fetchall()
         
-        # 4) كل الـ roll_boms لكل المنتجات (للسيمي)
+        # 4) كل الـ roll_boms لكل المنتجات (للسيمي) مع كود المنتج
         cur.execute(
             """
             SELECT
                 prb.id,                     -- 0 roll_bom_id
-                p.micron,                   -- 1
-                p.stretchability_percent,   -- 2
-                COALESCE(prb.label, ''),    -- 3 label
-                prb.weight_from_kg,         -- 4
-                prb.weight_to_kg,           -- 5
-                prb.is_active               -- 6
+                p.code,                     -- 1 product_code
+                p.micron,                   -- 2
+                p.stretchability_percent,   -- 3
+                COALESCE(prb.label, ''),    -- 4 label
+                prb.weight_from_kg,         -- 5
+                prb.weight_to_kg,           -- 6
+                prb.is_active               -- 7
             FROM product_roll_boms prb
             JOIN products p ON prb.product_id = p.id
             WHERE prb.is_active = TRUE
