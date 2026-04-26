@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, abort
 from flask_login import login_required, current_user
 from db import get_db
+from .settings import get_roll_size_label
 
 monitoring_bp = Blueprint("monitoring", __name__, template_folder="../templates")
 
@@ -29,6 +30,7 @@ def monitoring_report():
         fx_rates = cur.fetchall()
 
         # Margin factors
+        # Margin factors
         cur.execute("""
             SELECT pricing_rules.id,
                 pricing_rules.micron_min,
@@ -42,7 +44,41 @@ def monitoring_report():
             JOIN packing_types ON pricing_rules.packing_type_id = packing_types.id
             ORDER BY pricing_rules.film_type, packing_types.name, pricing_rules.micron_min
         """)
-        pricing_rules = cur.fetchall()
+        pricing_rules_raw = cur.fetchall()
+
+        # بناء roll size labels للمونيتورينج
+        pricing_rules = []
+        for r in pricing_rules_raw:
+            (
+                rule_id,
+                micron_min,
+                micron_max,
+                film_type,
+                packing_type_name,
+                roll_weight_min,
+                roll_weight_max,
+                margin_percent,
+            ) = r
+
+            roll_size_label = get_roll_size_label(
+                roll_weight_min,
+                roll_weight_max,
+                packing_type_name,
+            )
+
+            pricing_rules.append(
+                (
+                    rule_id,
+                    micron_min,
+                    micron_max,
+                    film_type,
+                    packing_type_name,
+                    roll_size_label,     # index 5
+                    roll_weight_min,     # index 6 (مخفي في الواجهة)
+                    roll_weight_max,     # index 7 (مخفي في الواجهة)
+                    margin_percent,      # index 8
+                )
+            )
 
         # Extra price settings
         cur.execute("""

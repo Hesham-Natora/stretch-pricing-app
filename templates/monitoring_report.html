@@ -92,8 +92,7 @@
         <th>Micron max</th>
         <th>Film type</th>
         <th>Operation</th>
-        <th>Roll wt min</th>
-        <th>Roll wt max</th>
+        <th>Roll size</th>
         <th>Margin %</th>
       </tr>
     </thead>
@@ -105,9 +104,14 @@
         <td>{{ r[2] }}</td>
         <td>{{ r[3] }}</td>
         <td>{{ r[4] }}</td>  {# packing_type_name #}
-        <td>{{ "%.2f"|format(r[5]) }}</td>
-        <td>{{ "%.2f"|format(r[6]) }}</td>
-        <td>{{ "%.2f"|format(r[7]) }}</td>
+        <td>
+          {% if r[5] %}
+            {{ r[5] }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ "%.2f"|format(r[8]) }}</td>
       </tr>
       {% endfor %}
     </tbody>
