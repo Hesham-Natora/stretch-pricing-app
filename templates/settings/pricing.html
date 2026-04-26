@@ -202,7 +202,6 @@
                     <th>Film type</th>
                     <th>Packing type</th>
                     <th>Roll size</th>
-                    <th>Roll weight (kg)</th>
                     <th class="text-end">Margin %</th>
                     <th class="text-end">Actions</th>
                   </tr>
@@ -222,13 +221,6 @@
                       {% endif %}
                     </td>
 
-                    <td>
-                      {% if r[5] or r[6] %}
-                        {{ "%.2f"|format(r[5] or 0) }}–{{ "%.2f"|format(r[6] or 0) }}
-                      {% else %}
-                        Any
-                      {% endif %}
-                    </td>
                     <td class="text-end">{{ "%.2f"|format(r[7]) }}</td>
                     <td class="text-end">
                       <form method="post"
@@ -258,7 +250,7 @@
                   </tr>
                   {% else %}
                   <tr>
-                    <td colspan="7" class="text-center text-muted py-2">No margin factors yet.</td>
+                    <td colspan="6" class="text-center text-muted py-2">No margin factors yet.</td>
                   </tr>
                   {% endfor %}
                 </tbody>
