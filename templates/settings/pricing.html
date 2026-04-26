@@ -201,6 +201,7 @@
                     <th>Micron</th>
                     <th>Film type</th>
                     <th>Packing type</th>
+                    <th>Roll size</th>
                     <th>Roll weight (kg)</th>
                     <th class="text-end">Margin %</th>
                     <th class="text-end">Actions</th>
@@ -212,6 +213,15 @@
                     <td>{{ r[1] }}–{{ r[2] }}</td>
                     <td>{{ r[3] }}</td>
                     <td>{{ packing_type_name_by_id.get(r[4], r[4]) }}</td>
+
+                    <td>
+                      {% if r[8] %}
+                        {{ r[8] }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+
                     <td>
                       {% if r[5] or r[6] %}
                         {{ "%.2f"|format(r[5] or 0) }}–{{ "%.2f"|format(r[6] or 0) }}
@@ -248,7 +258,7 @@
                   </tr>
                   {% else %}
                   <tr>
-                    <td colspan="6" class="text-center text-muted py-2">No margin factors yet.</td>
+                    <td colspan="7" class="text-center text-muted py-2">No margin factors yet.</td>
                   </tr>
                   {% endfor %}
                 </tbody>

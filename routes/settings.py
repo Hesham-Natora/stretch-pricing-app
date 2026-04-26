@@ -285,6 +285,35 @@ def delete_sea_freight(rate_id):
 # -----------------------------
 # Pricing Settings
 # -----------------------------
+def get_roll_size_label(roll_weight_min, roll_weight_max, packing_type_name: str) -> str:
+    """
+    يحوّل مدى وزن الرول + نوع الباكنج إلى label جاهز للـ UI.
+    """
+    name = (packing_type_name or "").strip()
+
+    # Pre-stretch بأنواعه
+    if name in ("Pre-stretch (No Box)", "Pre-stretch (Box)"):
+        return "Prestretch Roll size"
+
+    # Manual من 0 إلى 9.99
+    if name == "Manual":
+        if roll_weight_min is not None and roll_weight_max is not None:
+            if roll_weight_min >= 0 and roll_weight_max <= 9.99:
+                return "Manual Roll size"
+
+    # Standard: 10–24.99
+    if roll_weight_min is not None and roll_weight_max is not None:
+        if roll_weight_min >= 10 and roll_weight_max <= 24.99:
+            return "Standard Roll size"
+
+    # Jumbo: 25–100
+    if roll_weight_min is not None and roll_weight_max is not None:
+        if roll_weight_min >= 25 and roll_weight_max <= 100:
+            return "Jumbo Roll size"
+
+    return ""
+
+
 @settings_bp.route("/pricing", methods=["GET", "POST"])
 def pricing_settings():
     editing_rule = None
@@ -339,7 +368,6 @@ def pricing_settings():
                         ),
                     )
                     flash("Margin factor saved.", "success")
-                    
                     _bump_pricing_cache_version()
 
             elif form_action == "edit_rule_load":
@@ -412,7 +440,6 @@ def pricing_settings():
                         ),
                     )
                     flash("Margin factor updated.", "success")
-                    
                     _bump_pricing_cache_version()
 
             elif form_action == "delete_rule":
@@ -421,7 +448,6 @@ def pricing_settings():
                 if rule_id > 0:
                     cur.execute("DELETE FROM pricing_rules WHERE id = %s", (rule_id,))
                     flash("Margin factor deleted.", "success")
-                    
                     _bump_pricing_cache_version()
 
             elif form_action == "save_extras":
@@ -432,7 +458,6 @@ def pricing_settings():
                     request.form.get("prestretch_extra_usd_per_kg") or 0
                 )
 
-                # NEW: foreign sellers extra
                 foreign_extra_mode = (request.form.get("foreign_extra_mode") or "percent").strip()
                 if foreign_extra_mode not in ("percent", "per_unit"):
                     foreign_extra_mode = "percent"
@@ -481,7 +506,6 @@ def pricing_settings():
                         (color_extra, prestretch_extra, foreign_extra_mode, foreign_extra_value),
                     )
                 flash("Extras saved.", "success")
-                
                 _bump_pricing_cache_version()
 
             elif form_action == "edit_payment_term_load":
@@ -499,7 +523,7 @@ def pricing_settings():
                     editing_term = cur.fetchone()
                     if not editing_term:
                         flash("Payment term not found.", "danger")
-                        
+
             elif form_action == "add_payment_term":
                 name = (request.form.get("pt_name") or "").strip()
                 credit_days = int(request.form.get("credit_days") or 0)
@@ -527,7 +551,6 @@ def pricing_settings():
                         (name, credit_days, annual_rate_percent),
                     )
                     flash("Payment term added.", "success")
-
                     _bump_pricing_cache_version()
 
             elif form_action == "edit_payment_term_save":
@@ -558,7 +581,6 @@ def pricing_settings():
                         (name, credit_days, annual_rate_percent, pt_id),
                     )
                     flash("Payment term updated.", "success")
-                    
                     _bump_pricing_cache_version()
 
             elif form_action == "delete_payment_term":
@@ -567,7 +589,6 @@ def pricing_settings():
                 if pt_id > 0:
                     cur.execute("DELETE FROM payment_terms WHERE id = %s", (pt_id,))
                     flash("Payment term deleted.", "success")
-                    
                     _bump_pricing_cache_version()
 
         # بعد POST نحمّل البيانات من جديد
@@ -626,10 +647,40 @@ def pricing_settings():
 
         extras = extras_rows[0] if extras_rows else None
 
+        # بناء labels
+        packing_type_name_by_id = {pt[0]: pt[1] for pt in packing_types}
+        pricing_rules_with_labels = []
+        for r in pricing_rules:
+            (
+                rule_id,
+                micron_min,
+                micron_max,
+                film_type,
+                packing_type_id,
+                roll_weight_min,
+                roll_weight_max,
+                margin_percent,
+            ) = r
+            pt_name = packing_type_name_by_id.get(packing_type_id, "")
+            roll_size_label = get_roll_size_label(roll_weight_min, roll_weight_max, pt_name)
+            pricing_rules_with_labels.append(
+                (
+                    rule_id,
+                    micron_min,
+                    micron_max,
+                    film_type,
+                    packing_type_id,
+                    roll_weight_min,
+                    roll_weight_max,
+                    margin_percent,
+                    roll_size_label,
+                )
+            )
+
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return render_template(
                 "settings/pricing.html",
-                pricing_rules=pricing_rules,
+                pricing_rules=pricing_rules_with_labels,
                 extras=extras,
                 payment_terms=payment_terms,
                 editing_rule=editing_rule,
@@ -638,7 +689,6 @@ def pricing_settings():
                 packing_types=packing_types,
             )
 
-        # الطلب العادي القديم (لو حد فتح بدون AJAX)
         return redirect(url_for("settings.pricing_settings"))
 
     # GET
@@ -697,9 +747,39 @@ def pricing_settings():
 
     extras = extras_rows[0] if extras_rows else None
 
+    # بناء labels للـ GET
+    packing_type_name_by_id = {pt[0]: pt[1] for pt in packing_types}
+    pricing_rules_with_labels = []
+    for r in pricing_rules:
+        (
+            rule_id,
+            micron_min,
+            micron_max,
+            film_type,
+            packing_type_id,
+            roll_weight_min,
+            roll_weight_max,
+            margin_percent,
+        ) = r
+        pt_name = packing_type_name_by_id.get(packing_type_id, "")
+        roll_size_label = get_roll_size_label(roll_weight_min, roll_weight_max, pt_name)
+        pricing_rules_with_labels.append(
+            (
+                rule_id,
+                micron_min,
+                micron_max,
+                film_type,
+                packing_type_id,
+                roll_weight_min,
+                roll_weight_max,
+                margin_percent,
+                roll_size_label,
+            )
+        )
+
     return render_template(
         "settings/pricing.html",
-        pricing_rules=pricing_rules,
+        pricing_rules=pricing_rules_with_labels,
         extras=extras,
         payment_terms=payment_terms,
         editing_rule=editing_rule,
