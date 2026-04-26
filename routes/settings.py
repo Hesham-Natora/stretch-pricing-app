@@ -295,21 +295,21 @@ def get_roll_size_label(roll_weight_min, roll_weight_max, packing_type_name: str
     if name in ("Pre-stretch (No Box)", "Pre-stretch (Box)"):
         return "Prestretch Roll size"
 
+    # لو مفيش وزن محدد → مفيش label
+    if roll_weight_min is None or roll_weight_max is None:
+        return ""
+
     # Manual من 0 إلى 9.99
-    if name == "Manual":
-        if roll_weight_min is not None and roll_weight_max is not None:
-            if roll_weight_min >= 0 and roll_weight_max <= 9.99:
-                return "Manual Roll size"
+    if name == "Manual" and roll_weight_min >= 0 and roll_weight_max <= 9.99:
+        return "Manual Roll size"
 
-    # Standard: 10–24.99
-    if roll_weight_min is not None and roll_weight_max is not None:
-        if roll_weight_min >= 10 and roll_weight_max <= 24.99:
-            return "Standard Roll size"
+    # Standard: من 10 إلى أقل من 25
+    if roll_weight_min >= 10 and roll_weight_max < 25:
+        return "Standard Roll size"
 
-    # Jumbo: 25–100
-    if roll_weight_min is not None and roll_weight_max is not None:
-        if roll_weight_min >= 25 and roll_weight_max <= 100:
-            return "Jumbo Roll size"
+    # Jumbo: من 25 إلى 100
+    if roll_weight_min >= 25 and roll_weight_max <= 100:
+        return "Jumbo Roll size"
 
     return ""
 
