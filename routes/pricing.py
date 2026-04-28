@@ -1971,7 +1971,7 @@ def pricing_screen():
                     "Disc %",
                     "EXW",
                     "FOB",
-                    "CFR",
+                    "CIF",
                 ]
                 for col, h in enumerate(headers):
                     ws.write(start_row, col, h, header_fmt)
