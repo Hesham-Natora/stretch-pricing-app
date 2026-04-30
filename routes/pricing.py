@@ -41,6 +41,13 @@ pricing_bp = Blueprint(
 _PRICING_STATIC_CACHE = {"version": None, "data": None}
 
 
+def generate_next_quotation_number(cur):
+    """Auto-generate quotation number"""
+    cur.execute("SELECT nextval('quotation_number_seq')")
+    seq_num = cur.fetchone()[0]
+    return f"Quote No. {seq_num:04d}"
+
+
 def invalidate_pricing_static_cache():
     global _PRICING_STATIC_CACHE
     _PRICING_STATIC_CACHE = {"version": None, "data": None}
@@ -1414,17 +1421,9 @@ def pricing_screen():
             # نسمح بتحديث بعض الحقول من الفورم وقت الحفظ (إن حابب تغيّر الاسم أو رقم الكوتيشن)
             customer_name = request.form.get("customer_name") or header_data.get("customer_name") or ""
             destination_text = request.form.get("destination_text") or header_data.get("customer_country") or ""
-            quotation_number = request.form.get("quotation_number") or header_data.get("quotation_number") or ""
+            # توليد رقم الكوتيشن أوتوماتيك
+            quotation_number = generate_next_quotation_number(cur)
 
-            if not quotation_number.strip():
-                return jsonify(
-                    {
-                        "lines_results": lines_results,
-                        "saved": False,
-                        "need_quotation_number": True,
-                        "message": "Please enter a unique quotation number before saving.",
-                    }
-                )
 
             with get_db() as cur:
                 
