@@ -256,6 +256,16 @@ CREATE TABLE IF NOT EXISTS quotations (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ===== Quotation Number Sequence =====
+-- Auto-generate quotation numbers: Quote No. 0001, 0002, ...
+CREATE SEQUENCE IF NOT EXISTS quotation_number_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
 -- Quotation Items (Products in quotation)
 CREATE TABLE IF NOT EXISTS quotation_items (
     id SERIAL PRIMARY KEY,
