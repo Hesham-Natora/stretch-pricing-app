@@ -1421,12 +1421,12 @@ def pricing_screen():
             # نسمح بتحديث بعض الحقول من الفورم وقت الحفظ (إن حابب تغيّر الاسم أو رقم الكوتيشن)
             customer_name = request.form.get("customer_name") or header_data.get("customer_name") or ""
             destination_text = request.form.get("destination_text") or header_data.get("customer_country") or ""
-            # توليد رقم الكوتيشن أوتوماتيك
-            quotation_number = generate_next_quotation_number(cur)
-
 
             with get_db() as cur:
                 
+                # توليد رقم الكوتيشن أوتوماتيك
+                quotation_number = generate_next_quotation_number(cur)
+              
                 t_db_start = time.perf_counter()
                 
                 # snapshot لشروط الدفع
