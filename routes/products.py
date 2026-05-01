@@ -1,5 +1,5 @@
 # routes/products.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import get_db
 from .settings import _bump_pricing_cache_version
 
@@ -55,15 +55,16 @@ def index():
         cur.execute(
             """
             SELECT id,
-                   code,
-                   micron,
-                   stretchability_percent,
-                   is_prestretch,
-                   bom_scrap_percent,
-                   film_type,
-                   is_manual,
-                   is_colored,
-                   kg_per_roll
+                code,
+                micron,
+                stretchability_percent,
+                is_prestretch,
+                bom_scrap_percent,
+                film_type,
+                is_manual,
+                is_colored,
+                kg_per_roll,
+                COALESCE(is_active, TRUE) as is_active
             FROM products
             ORDER BY code
             """
@@ -71,6 +72,25 @@ def index():
         products = cur.fetchall()
     return render_template("products/index.html", products=products)
 
+@products_bp.route("/toggle_active/<int:product_id>", methods=["POST"])
+def toggle_active(product_id):
+    """Toggle product active status via AJAX"""
+    try:
+        data = request.get_json()
+        is_active = data.get("is_active", True)
+        
+        with get_db() as cur:
+            cur.execute(
+                "UPDATE products SET is_active = %s WHERE id = %s",
+                (is_active, product_id)
+            )
+        
+        _bump_pricing_cache_version()
+        
+        return jsonify({"success": True, "is_active": is_active})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    
 
 @products_bp.route("/edit/<int:product_id>", methods=["GET", "POST"])
 def edit(product_id):

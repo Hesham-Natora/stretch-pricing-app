@@ -18,6 +18,7 @@
           <th>Film type</th>
           <th class="text-end">Micron</th>
           <th class="text-end">Stretchability (%)</th>
+          <th class="text-center">Active</th>
           <th class="text-center">Actions</th>
         </tr>
       </thead>
@@ -45,6 +46,16 @@
           <td class="text-end">{{ p[2] }}</td>
           <td class="text-end">{{ p[3] }}</td>
           <td class="text-center">
+            <div class="form-check form-switch d-inline-block">
+              <input class="form-check-input product-toggle" 
+                    type="checkbox" 
+                    id="toggle_{{ p[0] }}"
+                    data-product-id="{{ p[0] }}"
+                    {% if p[10] %}checked{% endif %}
+                    style="cursor: pointer;">
+            </div>
+          </td>
+          <td class="text-center">
             <div class="btn-group btn-group-sm">
               <a href="{{ url_for('products.edit', product_id=p[0]) }}" class="btn btn-outline-primary">
                 <i class="bi bi-pencil"></i>
@@ -63,7 +74,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="text-center text-muted py-4">
+          <td colspan="6" class="text-center text-muted py-4">
             No products yet. Click “Add Product” to create one.
           </td>
         </tr>
@@ -72,4 +83,40 @@
     </table>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const toggles = document.querySelectorAll('.product-toggle');
+  
+  toggles.forEach(toggle => {
+    toggle.addEventListener('change', function() {
+      const productId = this.dataset.productId;
+      const isActive = this.checked;
+      
+      fetch(`{{ url_for('products.toggle_active', product_id=0) }}`.replace('/0', `/${productId}`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_active: isActive })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          const status = isActive ? 'enabled' : 'disabled';
+          console.log(`Product ${productId} ${status} for pricing`);
+        } else {
+          alert('Error updating product status: ' + data.error);
+          this.checked = !isActive;
+        }
+      })
+      .catch(error => {
+        alert('Network error: ' + error);
+        this.checked = !isActive;
+      });
+    });
+  });
+});
+</script>
+
 {% endblock %}

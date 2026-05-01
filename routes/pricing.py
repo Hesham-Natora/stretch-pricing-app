@@ -1280,6 +1280,7 @@ def pricing_screen():
                    kg_per_roll,
                    bom_scrap_percent
             FROM products
+            WHERE COALESCE(is_active, TRUE) = TRUE
             ORDER BY code
             """
         )
