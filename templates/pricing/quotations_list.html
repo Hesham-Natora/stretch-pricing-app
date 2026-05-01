@@ -6,7 +6,9 @@
 <div class="container-fluid mt-3">
   <div class="d-flex justify-content-between align-items-center mb-2">
     <h2 class="h5 mb-0">Saved quotations</h2>
-    <a href="{{ url_for('pricing.pricing_screen', clear=1) }}" class="btn btn-sm btn-primary">
+    <a href="{{ url_for('pricing.pricing_screen', clear=1) }}" 
+      class="btn btn-sm btn-primary"
+      onclick="return confirm('Are you sure you want to clear this quotation and start a new one?')">
       <i class="bi bi-plus-lg"></i> New quotation
     </a>
   </div>
