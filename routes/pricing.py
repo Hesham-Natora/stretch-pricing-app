@@ -2431,6 +2431,7 @@ def pricing_screen():
                     "selected_payment_term_id": selected_payment_term_id,
                     "discount_percent": discount_percent,
                     "seller_type": seller_type,
+                    "customer_name": request.form.get("customer_name") or "",
                 }
                 session["pricing_lines_input"] = lines_input
                 session["pricing_lines_results"] = lines_results
@@ -2447,6 +2448,7 @@ def pricing_screen():
             "selected_payment_term_id": selected_payment_term_id,
             "discount_percent": discount_percent,
             "seller_type": seller_type,
+            "customer_name": request.form.get("customer_name") or "",
         }
         session["pricing_lines_input"] = lines_input
         session["pricing_lines_results"] = lines_results
