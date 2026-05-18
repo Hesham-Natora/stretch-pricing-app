@@ -60,6 +60,7 @@ ALTER TABLE products
     ADD COLUMN IF NOT EXISTS is_colored  BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS kg_per_roll NUMERIC(10,4) DEFAULT 0,
     ADD COLUMN IF NOT EXISTS film_type   VARCHAR(20) NOT NULL DEFAULT 'standard';
+    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- pricing extras
 CREATE TABLE IF NOT EXISTS pricing_extras (
@@ -423,3 +424,12 @@ BEGIN
             UNIQUE (roll_bom_id, semi_product_id);
     END IF;
 END$$;
+
+CREATE TABLE pricing_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    header_json JSONB NOT NULL,
+    lines_input_json JSONB NOT NULL,
+    lines_results_json JSONB NOT NULL
+);

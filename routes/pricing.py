@@ -2,6 +2,7 @@ from collections import defaultdict
 import math
 import time
 from decimal import Decimal, ROUND_HALF_UP
+import json
 
 
 from flask import (
@@ -1262,9 +1263,16 @@ def pricing_sync():
 def pricing_screen():
     # clear=1 من New quotation
     if request.method == "GET" and request.args.get("clear") == "1":
-        session.pop("pricing_header", None)
-        session.pop("pricing_lines_input", None)
-        session.pop("pricing_lines_results", None)
+        # امسح كل جلسات التسعير لهذا المستخدم
+        with get_db() as cur:
+            cur.execute(
+                "DELETE FROM pricing_sessions WHERE user_id = %s",
+                (current_user.id,),
+            )
+
+        # امسح أي reference في الـ session
+        session.pop("pricing_session_id", None)
+
         return redirect(url_for("pricing.pricing_screen"))
 
     # تحميل بيانات ثابتة للشاشة (products, ports, ... )
@@ -1396,13 +1404,41 @@ def pricing_screen():
             request.headers.get("X-Requested-With") == "XMLHttpRequest"
             and mode == "save"
         ):
-            
             t0 = time.perf_counter()
-            
-            # نقرأ آخر حالة من السيشن
-            header_data = session.get("pricing_header") or {}
-            lines_input = session.get("pricing_lines_input", []) or []
-            lines_results = session.get("pricing_lines_results", []) or []
+
+            pricing_session_id = session.get("pricing_session_id")
+            if not pricing_session_id:
+                return jsonify(
+                    {
+                        "saved": False,
+                        "need_calculate_first": True,
+                        "message": "Please calculate pricing before saving.",
+                    }
+                )
+
+            with get_db() as cur:
+                cur.execute(
+                    """
+                    SELECT header_json, lines_input_json, lines_results_json
+                    FROM pricing_sessions
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (pricing_session_id, current_user.id),
+                )
+                row = cur.fetchone()
+
+            if not row:
+                return jsonify(
+                    {
+                        "saved": False,
+                        "need_calculate_first": True,
+                        "message": "Please calculate pricing before saving.",
+                    }
+                )
+
+            header_data = row[0]
+            lines_input = row[1]
+            lines_results = row[2]
 
             if not lines_input or not lines_results:
                 return jsonify(
@@ -1647,18 +1683,6 @@ def pricing_screen():
                 )
             )
 
-            # نحدّث السيشن لو حابب
-            session["pricing_header"] = {
-                "selected_port_id": selected_port_id,
-                "selected_dest_id": selected_dest_id,
-                "selected_payment_term_id": selected_payment_term_id,
-                "discount_percent": discount_percent,
-                "customer_name": customer_name,
-                "quotation_number": quotation_number,
-            }
-            session["pricing_lines_input"] = lines_input
-            session["pricing_lines_results"] = lines_results
-
             return jsonify(
                 {
                     "lines_results": lines_results,
@@ -1670,12 +1694,30 @@ def pricing_screen():
 
         # لو الطلب Export PDF/Excel: نستخدم POST عادي (مش AJAX) ونرجّع ملف
         if mode in ("export_pdf", "export_excel"):
-            # هنا نفترض إن الحساب تم بالفعل (lines_results جاهزة في الـ session)
-            header_data = session.get("pricing_header") or {}
-            lines_input = session.get("pricing_lines_input", []) or []
-            lines_results = session.get("pricing_lines_results", []) or []
+            pricing_session_id = session.get("pricing_session_id")
+            if not pricing_session_id:
+                flash("Nothing to export. Please calculate first.", "warning")
+                return redirect(url_for("pricing.pricing_screen"))
 
-            # لو مفيش بيانات، ما نصدرش
+            with get_db() as cur:
+                cur.execute(
+                    """
+                    SELECT header_json, lines_input_json, lines_results_json
+                    FROM pricing_sessions
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (pricing_session_id, current_user.id),
+                )
+                row = cur.fetchone()
+
+            if not row:
+                flash("Nothing to export. Please calculate first.", "warning")
+                return redirect(url_for("pricing.pricing_screen"))
+
+            header_data = row[0]
+            lines_input = row[1]
+            lines_results = row[2]
+
             if not lines_input or not lines_results:
                 flash("Nothing to export. Please calculate first.", "warning")
                 return redirect(url_for("pricing.pricing_screen"))
@@ -2426,7 +2468,7 @@ def pricing_screen():
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             # طلب AJAX: إما calculate (والـ save اتعالج فوق)
             if mode == "calculate":
-                session["pricing_header"] = {
+                header_data = {
                     "selected_port_id": selected_port_id,
                     "selected_dest_id": selected_dest_id,
                     "selected_payment_term_id": selected_payment_term_id,
@@ -2434,16 +2476,40 @@ def pricing_screen():
                     "seller_type": seller_type,
                     "customer_name": request.form.get("customer_name") or "",
                 }
-                session["pricing_lines_input"] = lines_input
-                session["pricing_lines_results"] = lines_results
 
+                # نخزن snapshot آخر حساب في جدول pricing_sessions
+                with get_db() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO pricing_sessions (
+                            user_id,
+                            header_json,
+                            lines_input_json,
+                            lines_results_json
+                        )
+                        VALUES (%s, %s::jsonb, %s::jsonb, %s::jsonb)
+                        RETURNING id
+                        """,
+                        (
+                            current_user.id,
+                            json.dumps(header_data),
+                            json.dumps(lines_input),
+                            json.dumps(lines_results),
+                        ),
+                    )
+                    pricing_session_id = cur.fetchone()[0]
+
+                # نحفظ في session فقط ID صغير
+                session["pricing_session_id"] = pricing_session_id
+
+                # نرجّع النتائج للـ frontend زي ما هي (UI لا يتغير)
                 return jsonify({"lines_results": lines_results})
 
             # أي mode AJAX آخر غير مدعوم هنا
             return jsonify({"error": "Unsupported AJAX mode."}), 400
 
-        # ===== POST عادي (بدون AJAX): نحفظ في السيشن ثم نعمل redirect كما كان =====
-        session["pricing_header"] = {
+        # ===== POST عادي (بدون AJAX): نخزن snapshot في الجدول ثم نعمل redirect =====
+        header_data = {
             "selected_port_id": selected_port_id,
             "selected_dest_id": selected_dest_id,
             "selected_payment_term_id": selected_payment_term_id,
@@ -2451,27 +2517,66 @@ def pricing_screen():
             "seller_type": seller_type,
             "customer_name": request.form.get("customer_name") or "",
         }
-        session["pricing_lines_input"] = lines_input
-        session["pricing_lines_results"] = lines_results
+
+        with get_db() as cur:
+            cur.execute(
+                """
+                INSERT INTO pricing_sessions (
+                    user_id,
+                    header_json,
+                    lines_input_json,
+                    lines_results_json
+                )
+                VALUES (%s, %s::jsonb, %s::jsonb, %s::jsonb)
+                RETURNING id
+                """,
+                (
+                    current_user.id,
+                    json.dumps(header_data),
+                    json.dumps(lines_input),
+                    json.dumps(lines_results),
+                ),
+            )
+            pricing_session_id = cur.fetchone()[0]
+
+        session["pricing_session_id"] = pricing_session_id
 
         return redirect(url_for("pricing.pricing_screen"))
     
+
     pricing_header = {}
 
     if request.method == "GET":
-        header_data = session.get("pricing_header")
-        if header_data:
-            selected_port_id = header_data.get("selected_port_id")
-            selected_dest_id = header_data.get("selected_dest_id")
-            selected_payment_term_id = header_data.get(
-                "selected_payment_term_id"
-            )
-            discount_percent = header_data.get("discount_percent", 0.0)
-            
-            pricing_header = header_data
+        pricing_session_id = session.get("pricing_session_id")
+        if pricing_session_id:
+            with get_db() as cur:
+                cur.execute(
+                    """
+                    SELECT header_json, lines_input_json, lines_results_json
+                    FROM pricing_sessions
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (pricing_session_id, current_user.id),
+                )
+                row = cur.fetchone()
 
-        lines_input = session.get("pricing_lines_input", []) or []
-        lines_results = session.get("pricing_lines_results", []) or []
+            if row:
+                header_data = row[0]
+                lines_input = row[1]
+                lines_results = row[2]
+
+                selected_port_id = header_data.get("selected_port_id")
+                selected_dest_id = header_data.get("selected_dest_id")
+                selected_payment_term_id = header_data.get("selected_payment_term_id")
+                discount_percent = header_data.get("discount_percent", 0.0)
+
+                pricing_header = header_data
+            else:
+                lines_input = []
+                lines_results = []
+        else:
+            lines_input = []
+            lines_results = []
 
     # reload payment terms for render
     with get_db() as cur:
