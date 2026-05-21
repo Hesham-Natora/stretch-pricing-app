@@ -636,6 +636,81 @@ def get_semi_price_net_per_kg_with_width(
     P_n_width = C_n_width * (1.0 + margin_ratio)
     return P_n_width
 
+def get_semi_price_net_per_kg_with_margin_discount(
+    product_id: int,
+    discount_percent: float,
+    width_mm: float | None = None,
+) -> float:
+    """
+    يحسب سعر السيمي net/kg بعد تطبيق خصم على نسبة المارجن (runtime فقط):
+    - C_n_base = total semi cost per kg net.
+    - margin_percent من pricing_rules عبر product_semis.pricing_rule_id.
+    - margin_percent_new = max(margin_percent - discount_percent, 0).
+    - لو width_mm موجود → نستخدم نسخة الكوست مع العرض (للبريسترتش).
+    - السعر النهائي = C_n_effective * (1 + margin_percent_new/100).
+    """
+    # 1) تكلفة السيمي الأساسية (بدون عرض)
+    C_n_base = get_semi_total_cost_per_kg(product_id)
+    if C_n_base <= 0:
+        return 0.0
+
+    # 2) قراءة gross/net + pricing_rule_id للحصول على margin_percent
+    with get_db() as cur:
+        cur.execute(
+            """
+            SELECT
+                gross_kg_per_roll,
+                core_kg_per_roll,
+                pricing_rule_id
+            FROM product_semis
+            WHERE product_id = %s
+            """,
+            (product_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return C_n_base
+
+    gross_kg_per_roll = float(row[0] or 0)
+    core_kg_per_roll = float(row[1] or 0)
+    pricing_rule_id = row[2]
+
+    if gross_kg_per_roll <= 0 or core_kg_per_roll < 0 or core_kg_per_roll >= gross_kg_per_roll:
+        return C_n_base
+
+    # 3) margin_percent الأصلي من pricing_rules
+    margin_percent = 0.0
+    if pricing_rule_id:
+        with get_db() as cur:
+            cur.execute(
+                "SELECT margin_percent FROM pricing_rules WHERE id = %s",
+                (pricing_rule_id,),
+            )
+            row_rule = cur.fetchone()
+            if row_rule:
+                margin_percent = float(row_rule[0] or 0)
+
+    # 4) تطبيق الخصم على نسبة المارجن
+    discount = float(discount_percent or 0.0)
+    margin_percent_new = margin_percent - discount
+    if margin_percent_new < 0:
+        margin_percent_new = 0.0
+
+    m_new = margin_percent_new / 100.0
+
+    # 5) اختيار الكوست مع/بدون width للبريسترتش
+    if width_mm is not None:
+        C_n_effective = get_semi_total_cost_per_kg_with_width(product_id, width_mm)
+        if C_n_effective <= 0:
+            C_n_effective = C_n_base
+    else:
+        C_n_effective = C_n_base
+
+    # 6) السعر الجديد للصافي بعد خصم مارجن السيمي
+    P_n_new = C_n_effective * (1.0 + m_new)
+    return P_n_new
+
 def get_semi_price_net_per_kg(product_id: int) -> float:
     """
     يحسب سعر السيمي لكل كجم *صافي*:

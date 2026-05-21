@@ -25,7 +25,8 @@ from services.costing import (
     get_materials_landed_price_per_kg_bulk,
     get_semi_total_cost_per_kg,
     get_semi_price_net_per_kg,
-    get_semi_price_net_per_kg_with_width
+    get_semi_price_net_per_kg_with_width,
+    get_semi_price_net_per_kg_with_margin_discount
 )
 
 #from xhtml2pdf import pisa
@@ -223,18 +224,38 @@ def calculate_line_price_bulk(
 
         if semi_product_id:
             semi_id = int(semi_product_id)
+            raw_discount_pct = float(discount_percent or 0.0)
+
             try:
-                # لو المنتج النهائي بريسترتش، نطبّق عرض الكوتيشن على السيمي runtime فقط
-                if film_type == "Prestretch" and width_mm and width_mm > 0:
-                    # شرط العرض الخاص بالسيمي مطبّق داخل get_semi_total_cost_per_kg_with_width
-                    price = float(
-                        get_semi_price_net_per_kg_with_width(semi_id, float(width_mm)) or 0.0
-                    )
+                # لو المنتج النهائي بريسترتش وفيه خصم → نطبّق الخصم على مارجن السيمي (runtime فقط)
+                if film_type == "Prestretch" and raw_discount_pct > 0:
+                    # استخدام الدالة الجديدة اللي بتخصم من مارجن السيمي
+                    if width_mm and width_mm > 0:
+                        price = float(
+                            get_semi_price_net_per_kg_with_margin_discount(
+                                semi_id,
+                                raw_discount_pct,
+                                float(width_mm),
+                            ) or 0.0
+                        )
+                    else:
+                        price = float(
+                            get_semi_price_net_per_kg_with_margin_discount(
+                                semi_id,
+                                raw_discount_pct,
+                                None,
+                            ) or 0.0
+                        )
                 else:
-                    # باقي الحالات (كل المنتجات الأخرى) تفضل على السلوك القديم
-                    price = float(
-                        get_semi_price_net_per_kg(semi_id) or 0.0
-                    )
+                    # باقي الحالات: السلوك القديم كما هو
+                    if film_type == "Prestretch" and width_mm and width_mm > 0:
+                        price = float(
+                            get_semi_price_net_per_kg_with_width(semi_id, float(width_mm)) or 0.0
+                        )
+                    else:
+                        price = float(
+                            get_semi_price_net_per_kg(semi_id) or 0.0
+                        )
             except Exception:
                 price = 0.0
         elif material_id:
@@ -2143,6 +2164,7 @@ def pricing_screen():
                 if not line_data.get("product_id"):
                     continue
                 lines_input.append(line_data)
+                
 
             if not lines_input:
                 if request.headers.get("X-Requested-With") == "XMLHttpRequest":
